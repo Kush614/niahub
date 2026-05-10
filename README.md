@@ -111,6 +111,21 @@
 [![preloaded](https://img.shields.io/badge/preloaded-17%20queries%20·%208%20packs-purple)](apps/web/lib/nia/snapshots.json)
 [![license](https://img.shields.io/badge/license-Apache%202.0-lightgrey)](LICENSE)
 
+
+  ▎ Today, Nia is a tool a small number of motivated developers configure for themselves. Tomorrow, NiaHub is the layer where every Cursor user, every
+  ▎ Claude Code session, every Codex job lands first when they need expert context. Eight packs, eight weeks. Then 800. Every install is your install. Every
+  ▎  query is your query. We're not asking Nia to be different — we're asking Nia to scale by being installable in one line.
+  
+  1. Nia is the indexer. NiaHub is the marketplace. Same way npm sits on top of Node, or the App Store sits on top of iOS. NiaHub doesn't replace the
+  substrate; it makes the substrate consumable.
+  2. The hard part of Nia isn't the indexer — it's the curation. Picking the right docs.stripe.com paths, the right stripe-node branch, the right refresh
+  cadence. Today every developer reinvents this work on their own laptop. NiaHub does it once. That's the wedge.
+  3. Trust isn't free. A pack with a 4% hallucination score that can show you the live diff against gpt-5-mini's ungrounded answer is a fundamentally
+  different product from "here's an index, hope it's good." Nia gives you raw retrieval. NiaHub gives you graded, audited, citation-grounded retrieval with
+  a visible delta.
+  4. Distribution is the real unlock for Nia. Every NiaHub install is a Nia query. Every query is a citation back to canonical docs. Every citation is a
+  "powered by Nia" pixel. Nia stops being a tool nobody finishes setting up and starts being a service everyone subscribes to.
+
 ---
 
 ## The wedge
