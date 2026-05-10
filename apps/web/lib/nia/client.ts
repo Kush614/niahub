@@ -41,6 +41,33 @@ function lookupSnapshot(pack_id: string, query: string): PackSnapshot | null {
   return best?.entry ?? null;
 }
 
+// Public — exposes the snapshot (with baseline + diff if enriched) for
+// /api/playground to consume. Returns null if no snapshot matches.
+export function findSnapshot(pack_id: string, query: string): {
+  match: string;
+  baseline: string | null;
+  diff: { improvements: string[]; avoided: string[]; verdict: string } | null;
+} | null {
+  const e = lookupSnapshot(pack_id, query);
+  if (!e) return null;
+  const raw = e as PackSnapshot & {
+    baseline?: string;
+    diff?: { improvements?: unknown; avoided?: unknown; verdict?: unknown } | null;
+  };
+  return {
+    match: e.match,
+    baseline: typeof raw.baseline === 'string' ? raw.baseline : null,
+    diff:
+      raw.diff && Array.isArray(raw.diff.improvements) && Array.isArray(raw.diff.avoided)
+        ? {
+            improvements: (raw.diff.improvements as unknown[]).filter((s): s is string => typeof s === 'string'),
+            avoided:      (raw.diff.avoided as unknown[]).filter((s): s is string => typeof s === 'string'),
+            verdict:      typeof raw.diff.verdict === 'string' ? raw.diff.verdict : '',
+          }
+        : null,
+  };
+}
+
 // Nia API client — talks to the real /v2 surface at https://apigcp.trynia.ai/v2.
 // Auth: Authorization: Bearer <NIA_API_KEY>.
 // When NIA_API_KEY is missing we fall back to deterministic fixtures so the

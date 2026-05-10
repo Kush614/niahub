@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { findSubscriptionByToken, getCurrentUser, getPack, createSubscription, logQueryEvent } from '@/lib/insforge';
-import { search, type NiaSource } from '@/lib/nia/client';
+import { search, findSnapshot, type NiaSource } from '@/lib/nia/client';
 import { explainTrace, compareAnswers, type AnswerDiff } from '@/lib/codex/auditor';
 import { pushFeedEvent } from '@/lib/convex/server';
 import { env } from '@/lib/env';
@@ -87,10 +87,15 @@ export async function POST(req: Request) {
   let baseline: string | null = null;
   let diff: AnswerDiff | null = null;
   if (body.compare) {
-    baseline = await rawCodexAnswer(body.query);
-    // Run the diff in parallel-friendly fashion (we already have both answers
-    // by here). Best-effort — if Codex 5xx's, the UI just hides the panel.
-    if (baseline && answer) {
+    // Prefer the cached baseline + diff that scripts/enrich-snapshots.mjs
+    // wrote alongside the answer. Falls through to a live OpenAI call only
+    // when the user asks something not in the snapshot file.
+    const snap = findSnapshot(body.pack_id, body.query);
+    if (snap?.baseline) baseline = snap.baseline;
+    if (snap?.diff) diff = snap.diff;
+
+    if (!baseline) baseline = await rawCodexAnswer(body.query);
+    if (baseline && answer && !diff) {
       diff = await compareAnswers({
         query: body.query,
         baseline,

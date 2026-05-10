@@ -23,6 +23,21 @@
         "_cache_type": "semantic",
         "_cache_similarity": 1,
         "_original_query": "Create a Stripe Checkout Session for a subscription with a 14-day trial using the latest API"
+      },
+      "baseline": "Node (ESM)\n```\nimport Stripe from 'stripe';\nconst stripe = new Stripe(process.env.STRIPE_SECRET_KEY);\n\nconst session = await stripe.checkout.sessions.create({\n  mode: 'subscription',\n  payment_method_types: ['card'],\n  line_items: [\n    // using an existing Price ID:\n    { price: 'price_XXXXXXXXXXXX', quantity: 1 }\n    // OR create inline price:\n    // {\n    //   price_data: {\n    //     currency: 'usd',\n    //     product_data: { name: 'Pro Plan' },\n    //     unit_amount: 2000,\n    //     recurring: { interval: 'month' }\n    //   },\n    //   quantity: 1\n    // }\n  ],\n  subscription_data: {\n    trial_period_days: 14\n  },\n  success_url: 'https://example.com/success?session_id={CHECKOUT_SESSION_ID}',\n  cancel_url: 'https://example.com/cancel'\n});\n\nconsole.log(session.id);\n```\n\nPython\n```\nimport os\nimport stripe\nstripe.api_key = os.environ['STRIPE_SECRET_KEY']\n\nsession = stripe.checkout.Session.create(\n  mode='subscription',\n  payment_method_types=['card'],\n  line_items=[\n    # using an existing Price ID:\n    {'price': 'price_XXXXXXXXXXXX', 'quantity': 1}\n    # OR inline price:\n    # {\n    #   'price_data': {\n    #     'currency': 'usd',\n    #     'product_data': {'name': 'Pro Plan'},\n    #     'unit_amount': 2000,\n    #     'recurring': {'interval': 'month'}\n    #   },\n    #   'quantity': 1\n    # }\n  ],\n  subscription_data={'trial_period_days': 14},\n  success_url='https://example.com/success?session_id={CHECKOUT_SESSION_ID}',\n  cancel_url='https://example.com/cancel'\n)\n\nprint(session.id)\n```",
+      "diff": {
+        "improvements": [
+          "Pinned apiVersion: '2024-09-30.acacia' in Stripe(...) to lock API behavior",
+          "Added payment_method_collection: 'always' to collect a payment method during trial",
+          "Used subscription_data.trial_settings.end_behavior to define missing_payment_method behavior",
+          "Included customer_email and subscription_data.description (noted as supported since v9.1.0)"
+        ],
+        "avoided": [
+          "Omitted apiVersion pinning in A (risking API drift); B pins apiVersion",
+          "Left trial end behavior undefined in A (no trial_settings.end_behavior)",
+          "Did not ensure payment method collection in A (no payment_method_collection)"
+        ],
+        "verdict": "NiaHub changed: pinned Stripe apiVersion and added trial_settings, payment_method_collection, customer_email, and description."
       }
     },
     {
@@ -48,6 +63,20 @@
         "_cache_type": "semantic",
         "_cache_similarity": 1,
         "_original_query": "Verify a Stripe webhook signature using the latest Node SDK"
+      },
+      "baseline": "Node (Express) — minimal example using the Stripe Node SDK and express.raw to keep the request body unparsed (required for signature verification):\n\nJavaScript (CommonJS)\n```\nconst express = require('express');\nconst Stripe = require('stripe');\nconst stripe = new Stripe(process.env.STRIPE_SECRET_KEY);\n\nconst app = express();\n\n/* Must use raw body for webhook route */\napp.post('/webhook', express.raw({ type: 'application/json' }), (req, res) => {\n  const sig = req.headers['stripe-signature'];\n  const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;\n\n  let event;\n  try {\n    // req.body is a Buffer because of express.raw\n    event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);\n  } catch (err) {\n    console.error('⚠️  Webhook signature verification failed.', err.message);\n    return res.status(400).send(`Webhook Error: ${err.message}`);\n  }\n\n  // Handle the event\n  switch (event.type) {\n    case 'payment_intent.succeeded':\n      // const pi = event.data.object;\n      break;\n    // ... handle other event types\n    default:\n      console.log(`Unhandled event type ${event.type}`);\n  }\n\n  res.json({ received: true });\n});\n\napp.listen(4242);\n```\n\nNotes:\n- Do NOT parse the webhook route body with express.json() — use express.raw({ type: 'application/json' }) so constructEvent can verify the signature.\n- Keep your endpoint secret (STRIPE_WEBHOOK_SECRET) private.",
+      "diff": {
+        "improvements": [
+          "Specifies middleware ordering: app.use('/webhook', express.raw({type:'application/json'})) before express.json()",
+          "Includes Next.js App Router and Pages Router examples using NextRequest/NextResponse, req.text(), and micro.buffer()",
+          "Shows serverless handling: Buffer.from(event.body, 'base64') for AWS Lambda base64-encoded bodies",
+          "Explains obtaining the webhook secret (Dashboard 'Signing secret' whsec_...) and extracting 'stripe-signature' header"
+        ],
+        "avoided": [
+          "Doesn't leave ambiguous middleware placement that can let express.json() break signature verification",
+          "Avoids omitting framework-specific fixes like config.api.bodyParser = false and proper buffer/text handling for Next.js/Lambda"
+        ],
+        "verdict": "NiaHub expanded the basic Express snippet with route-specific raw middleware ordering, Next.js/Lambda examples, and explicit whsec_/header guidance."
       }
     },
     {
@@ -73,6 +102,21 @@
         "_cache_type": "semantic",
         "_cache_similarity": 1,
         "_original_query": "Use Setup Intents to save a card without charging it now"
+      },
+      "baseline": "Node (Express) — create a SetupIntent and return its client_secret\n```js\n// server.js\nconst express = require('express');\nconst Stripe = require('stripe');\nconst stripe = Stripe(process.env.STRIPE_SECRET_KEY);\nconst app = express();\napp.use(express.json());\n\napp.post('/create-setup-intent', async (req, res) => {\n  // supply or create a customerId so the saved card is attached to the customer\n  const customerId = req.body.customerId; // required to attach PM to customer\n  const setupIntent = await stripe.setupIntents.create({\n    customer: customerId,\n    payment_method_types: ['card'],\n    usage: 'off_session' // indicates future off-session use\n  });\n  res.json({ clientSecret: setupIntent.client_secret });\n});\n\napp.listen(4242);\n```\n\nClient (Stripe.js + Elements) — collect card and confirm the SetupIntent\n```html\n<!-- index.html -->\n<script src=\"https://js.stripe.com/v3/\"></script>\n<form id=\"setup-form\">\n  <div id=\"card-element\"></div>\n  <button type=\"submit\">Save card</button>\n</form>\n\n<script>\nconst stripe = Stripe('pk_test_...'); // your publishable key\nconst elements = stripe.elements();\nconst card = elements.create('card');\ncard.mount('#card-element');\n\nasync function fetchClientSecret(customerId){\n  const r = await fetch('/create-setup-intent', {\n    method: 'POST',\n    headers:{'Content-Type':'application/json'},\n    body: JSON.stringify({ customerId })\n  });\n  const j = await r.json();\n  return j.clientSecret;\n}\n\ndocument.getElementById('setup-form').addEventListener('submit', async (e) => {\n  e.preventDefault();\n  const customerId = 'cus_...'; // pass the customer id for which you're saving the card\n  const clientSecret = await fetchClientSecret(customerId);\n\n  const { setupIntent, error } = await stripe.confirmCardSetup(clientSecret, {\n    payment_method: {\n      card,\n      billing_details: { name: 'Jenny Rosen' }\n    }\n  });\n\n  if (error) {\n    console.error(error.message);\n    // show error to user\n  } else {\n    console.log('SetupIntent successful:', setupIntent);\n    // payment_method is saved and attached to the customer (if you created with customer)\n    // setupIntent.payment_method contains the PaymentMethod id (pm_...)\n  }\n});\n</script>\n```\n\nHow to charge later (server)\n```js\n// create a PaymentIntent using saved PaymentMethod (off-session)\nconst paymentIntent = await stripe.paymentIntents.create({\n  amount: 2000,\n  currency: 'usd',\n  customer: 'cus_...',\n  payment_method: 'pm_...',    // from setupIntent.payment_method\n  off_session: true,\n  confirm: true\n});\n```\n\nNotes\n- Create the SetupIntent with a customer so Stripe will attach the resulting PaymentMethod to that customer automatically.\n- Use stripe.confirmCardSetup on the client to complete card collection without charging now.\n- After success, use the saved PaymentMethod id to create PaymentIntents/charges later (typically off_session).",
+      "diff": {
+        "improvements": [
+          "Added Stripe Connect examples using the stripeAccount option when creating intents",
+          "Documented specific test cards and referenced issue #676 for 4000002500003155",
+          "Explicit SCA/3D Secure guidance and recommendation to use off_session:true for later charges",
+          "Emphasized never sending raw card data; explicitly recommend Stripe.js/Elements"
+        ],
+        "avoided": [
+          "Omitted SCA caveat that saved cards may still require re-auth; B explicitly warns",
+          "Lacked Stripe Connect (stripeAccount) example which could mislead Connect users",
+          "Did not cite problematic test cards (e.g., 4000002500003155); B provides specifics"
+        ],
+        "verdict": "NiaHub added Stripe Connect (stripeAccount) examples, cited issue #676 and test-card caveats, and clarified SCA/off_session best practices."
       }
     }
   ],
@@ -96,6 +140,21 @@
         ],
         "follow_up_questions": [],
         "retrieval_log_id": "aa8a95ea-2a96-4a76-b067-5baf5a202833"
+      },
+      "baseline": "// server.js (Node + express example using React 18 streaming)\nconst express = require('express');\nconst React = require('react');\nconst { renderToPipeableStream } = require('react-dom/server');\nconst App = require('./App.server').default;\n\nconst app = express();\napp.use('/client.js', express.static('dist/client.js')); // your bundled client\n\napp.get('/', (req, res) => {\n  res.setHeader('Content-Type', 'text/html; charset=utf-8');\n\n  const { pipe, abort } = renderToPipeableStream(React.createElement(App), {\n    onShellReady() {\n      // send the shell immediately (html up to the root container)\n      res.write(`<!doctype html><html><head><meta charset=\"utf-8\"><title>RSC + Suspense</title></head><body>`);\n      res.write(`<div id=\"root\">`);\n      pipe(res); // start streaming the React output into the root\n    },\n    onShellError(err) {\n      res.statusCode = 500;\n      res.send(`<!doctype html><p>Server rendering failed</p><pre>${err.message}</pre>`);\n    },\n    onAllReady() {\n      // all Suspense boundaries resolved and stream finished; close HTML\n      res.write(`</div><script src=\"/client.js\"></script></body></html>`);\n      res.end();\n    },\n    onError(err) {\n      console.error(err);\n    }\n  });\n\n  // safety timeout\n  setTimeout(() => abort(), 10000);\n});\n\napp.listen(3000);\n\n// App.server.jsx (Server Component using Suspense)\nimport React, { Suspense } from 'react';\nimport Slow from './Slow.server';\n\nexport default function App() {\n  return (\n    <div>\n      <h1>Server Component shell</h1>\n      <Suspense fallback={<div>Loading slow part…</div>}>\n        <Slow />\n      </Suspense>\n    </div>\n  );\n}\n\n// Slow.server.jsx (async server component)\nimport React from 'react';\n\nasync function fetchSlow() {\n  await new Promise((r) => setTimeout(r, 2000));\n  return 'Slow data loaded';\n}\n\nexport default async function Slow() {\n  const data = await fetchSlow();\n  return <div>{data}</div>;\n}\n\n// client.js (client hydration entry)\nimport React from 'react';\nimport { hydrateRoot } from 'react-dom/client';\nimport ClientApp from './App.client'; // a client-compatible entry matching the server-rendered markup\n\nhydrateRoot(document.getElementById('root'), <ClientApp />);\n\nNotes:\n- The server component (Slow.server.jsx) can be async and will suspend; Suspense provides a fallback while it resolves.\n- renderToPipeableStream streams the shell immediately (onShellReady) and progressively fills Suspense boundaries as they resolve.\n- Use hydrateRoot on the client to attach React to the streamed HTML so interactive client components take over.",
+      "diff": {
+        "improvements": [
+          "Adds renderToReadableStream for edge runtimes (Deno, Cloudflare Workers), missing in A",
+          "Explicitly names the two server APIs: renderToPipeableStream and renderToReadableStream",
+          "Cites React CHANGELOG.md and links guidance to official changelog entries",
+          "Provides an Edge example that returns a Response with a ReadableStream"
+        ],
+        "avoided": [
+          "Mixing CommonJS require() with ES module imports in a single example (CJS/ESM mismatch)",
+          "Relying solely on a hard setTimeout abort pattern without mentioning edge/ReadableStream behavior",
+          "Implicitly suggesting only Node.js renderToPipeableStream usage and omitting edge runtime guidance"
+        ],
+        "verdict": "NiaHub updated examples to prefer renderToReadableStream for edge, cite React CHANGELOG.md, and de-emphasize renderToString."
       }
     },
     {
@@ -117,6 +176,21 @@
         ],
         "follow_up_questions": [],
         "retrieval_log_id": "48d42d28-5b71-4db1-bdda-d39bb91b1050"
+      },
+      "baseline": "Prelim: React historically only auto‑batched updates inside React event handlers. Two ways batching happens outside those handlers:\n\n1) React 18+ automatic batching\n- In React 18, updates are automatically batched across any async boundary (setTimeout, Promise.then, native events, fetch callbacks, etc.). Updates that occur in the same event-loop turn are combined into one render.\n\nExample (React 18 — no extra API needed):\n```jsx\n// React 18+\nsetTimeout(() => {\n  setCount(c => c + 1);\n  setFlag(f => !f); // Both are batched into one render in React 18+\n});\n```\n\n2) Manual batching in older React (or explicitly)\n- Before React 18, or if you need explicit control, use react-dom's unstable_batchedUpdates to batch updates outside React handlers. Or use flushSync to force immediate render.\n\nExample (pre-React 18 or explicit):\n```jsx\nimport { unstable_batchedUpdates } from 'react-dom';\n\nsetTimeout(() => {\n  unstable_batchedUpdates(() => {\n    setCount(c => c + 1);\n    setFlag(f => !f); // batched into one render\n  });\n});\n```\n\nNotes:\n- Use flushSync to force a render immediately if needed.\n- startTransition controls update priority but not batching semantics.",
+      "diff": {
+        "improvements": [
+          "Differentiates React 18 (auto-batching everywhere) from legacy mode",
+          "Shows microtask batching (queueMicrotask) with act test evidence",
+          "Explains legacy behavior: batching stops after first await in async act",
+          "References internal batchedUpdates flag (isInsideEventHandler) and manual APIs"
+        ],
+        "avoided": [
+          "Avoided blanket 'any async boundary' claim without test nuance",
+          "Avoided suggesting unstable_batchedUpdates as a stable public API",
+          "Avoided oversimplifying 'same event-loop turn' semantics"
+        ],
+        "verdict": "B replaces A's broad claims with precise, tested distinctions: React 18 auto-batches (incl. microtasks); legacy mode doesn't; batchedUpdates is internal."
       }
     }
   ],
@@ -140,6 +214,21 @@
         ],
         "follow_up_questions": [],
         "retrieval_log_id": "a057b3d5-bac6-46c6-a1f4-2358b2afe5a3"
+      },
+      "baseline": "Code-first summary + examples.\n\nWhen to use which\n- Use cache (React/Next server-side memoization) when you want to deduplicate/ memoize an expensive function or data fetch while the server process is running. It's an in-memory memo for server components — fast, per-process, cleared on restart. It does NOT update static/ISR HTML served to clients.\n- Use revalidatePath (next/cache) when you changed underlying data (e.g. created/updated/deleted a record) and need the App Router’s cached/ISR-rendered route(s) to be invalidated so the next request re-renders fresh HTML/data. It triggers on‑demand revalidation of route output.\n\nExamples\n\n1) cache() for memoizing a server fetch/function\nimport { cache } from 'react';\n\nconst fetchProducts = cache(async () => {\n  const res = await fetch('https://api.example.com/products');\n  return res.json();\n});\n\nexport default async function Page() {\n  const products = await fetchProducts(); // memoized per server instance\n  return /* JSX using products */;\n}\n\nUse cache when: you want to avoid repeated work during server rendering (multiple components calling same helper), not when you need ISR updates propagated to clients.\n\n2) revalidatePath to update ISR/route cache after a mutation\nimport { revalidatePath } from 'next/cache';\n\nexport async function POST(req) {\n  const body = await req.json();\n  await db.insert('products', body); // mutate data\n\n  revalidatePath('/products'); // mark that route for revalidation\n  return new Response(null, { status: 303, headers: { Location: '/products' }});\n}\n\nUse revalidatePath when: after a data mutation you need the App Router’s cached route (/products) to be revalidated so subsequent requests see the change.\n\nExtra notes (short)\n- cache is per server process and immediate in-memory memoization.\n- revalidatePath affects routing/cache/invalidation behavior (ISR) and should be called from server-side code (actions, API routes, server handlers).\n- For tag-based granular invalidation, consider fetch(..., { next: { tags: ['products'] } }) + revalidateTag instead of revalidatePath.",
+      "diff": {
+        "improvements": [
+          "'use cache' treated as a directive for function-level caching (Next.js 13.4+).",
+          "Explains revalidatePath (next/cache) invalidates only; regeneration happens on next request.",
+          "Documents revalidateTag and fetch(..., { next: { tags } }) for tag-based invalidation.",
+          "Notes revalidatePath also clears client Router Cache when used in Server Actions."
+        ],
+        "avoided": [
+          "Conflating cache() import with the 'use cache' directive.",
+          "Implying revalidatePath regenerates pages immediately; it only invalidates cache.",
+          "Mixing server-process memoization semantics with ISR/HTML serving behavior."
+        ],
+        "verdict": "NiaHub aligned the answer to Next.js 13.4+ docs: use 'use cache' for function caching and revalidatePath/revalidateTag for ISR invalidation."
       }
     },
     {
@@ -161,6 +250,21 @@
         ],
         "follow_up_questions": [],
         "retrieval_log_id": "5e21db05-ac64-4032-8263-545462ae9d34"
+      },
+      "baseline": "app/_lib/jobs.ts\n```ts\nimport { EventEmitter } from 'events';\nconst jobs = new Map<string, EventEmitter>();\n\nexport function createJob(id: string) {\n  const e = new EventEmitter();\n  jobs.set(id, e);\n  return e;\n}\nexport function getJob(id: string) {\n  return jobs.get(id);\n}\nexport function removeJob(id: string) {\n  jobs.delete(id);\n}\n```\n\napp/actions.ts\n```ts\n\"use server\";\n\nimport { randomUUID } from \"crypto\";\nimport { createJob } from \"./_lib/jobs\";\n\nexport async function startLongTask(): Promise<string> {\n  const id = randomUUID();\n  const e = createJob(id);\n\n  // fire-and-forget async work that emits progress\n  (async () => {\n    for (let i = 1; i <= 100; i++) {\n      await new Promise((r) => setTimeout(r, 50)); // simulate work\n      e.emit(\"progress\", i); // emit percent\n    }\n    e.emit(\"done\");\n  })();\n\n  return id;\n}\n```\n\napp/api/progress/[id]/route.ts\n```ts\nimport { NextResponse } from \"next/server\";\nimport { getJob, removeJob } from \"@/app/_lib/jobs\";\n\nexport async function GET(req: Request, { params }: { params: { id: string } }) {\n  const id = params.id;\n  const job = getJob(id);\n  if (!job) return new Response(\"Not found\", { status: 404 });\n\n  const encoder = new TextEncoder();\n\n  const stream = new ReadableStream({\n    start(controller) {\n      const onProgress = (p: number) =>\n        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ progress: p })}\\n\\n`));\n      const onDone = () => {\n        controller.enqueue(encoder.encode(`event: done\\ndata: {}\\n\\n`));\n        controller.close();\n        removeJob(id);\n      };\n\n      job.on(\"progress\", onProgress);\n      job.on(\"done\", onDone);\n\n      // cleanup if client disconnects\n      controller.onerror = controller.oncancel = () => {\n        job.off(\"progress\", onProgress);\n        job.off(\"done\", onDone);\n      };\n    },\n  });\n\n  return new Response(stream, {\n    headers: {\n      \"Content-Type\": \"text/event-stream\",\n      \"Cache-Control\": \"no-cache\",\n      Connection: \"keep-alive\",\n    },\n  });\n}\n```\n\napp/page.tsx (client component)\n```tsx\n\"use client\";\n\nimport { useState, useEffect } from \"react\";\nimport { startLongTask } from \"./actions\"; // server action import\n\nexport default function Page() {\n  const [jobId, setJobId] = useState<string | null>(null);\n  const [progress, setProgress] = useState(0);\n\n  useEffect(() => {\n    if (!jobId) return;\n    const es = new EventSource(`/api/progress/${jobId}`);\n    es.onmessage = (e) => {\n      try {\n        const data = JSON.parse(e.data);\n        if (data?.progress != null) setProgress(data.progress);\n      } catch {}\n    };\n    es.addEventListener(\"done\", () => {\n      es.close();\n    });\n    return () => es.close();\n  }, [jobId]);\n\n  return (\n    <main>\n      <button\n        onClick={async () => {\n          const id = await startLongTask(); // calls server action that starts work and returns id\n          setJobId(id);\n          setProgress(0);\n        }}\n      >\n        Start\n      </button>\n\n      <div>Progress: {progress}%</div>\n      <progress value={progress} max={100} />\n    </main>\n  );\n}\n```\n\nNotes:\n- This pattern uses a server action to start work and assign a job id, and an SSE endpoint to stream progress to a client component.\n- Works on Node runtime (not Edge) because it uses EventEmitter and ReadableStream server-side.",
+      "diff": {
+        "improvements": [
+          "Returns a Response with a ReadableStream from the server action (app/actions.ts) for direct streaming",
+          "Client consumes stream via response.body.getReader() + TextDecoder (ProgressTracker.tsx) instead of EventSource",
+          "Provides a React RSC streaming option using createStreamableValue / readStreamableValue (ai/rsc) for Suspense",
+          "Avoids a global Node EventEmitter job store (no app/_lib/jobs.ts), removing Node-only runtime constraints"
+        ],
+        "avoided": [
+          "Avoids Node-only EventEmitter job-store (app/_lib/jobs.ts) which breaks on Edge/Serverless",
+          "Avoids separate SSE endpoint + id routing (app/api/progress/[id]/route.ts) that can leak memory across requests",
+          "Avoids controller.onerror/oncancel cleanup hacks by using a proper response.body reader loop on the client"
+        ],
+        "verdict": "NiaHub replaced the SSE+EventEmitter job-store (app/_lib/jobs.ts) with server-action ReadableStream Response and client response.body.getReader()."
       }
     }
   ],
@@ -184,6 +288,22 @@
         ],
         "follow_up_questions": [],
         "retrieval_log_id": "ed92031d-30a6-4781-8763-173eb6ad385a"
+      },
+      "baseline": "```sql\n-- Enable pgvector extension\nCREATE EXTENSION IF NOT EXISTS vector;\n\n-- Example table with a fixed-dimension vector column (adjust dimension as needed)\nCREATE TABLE documents (\n  id   bigserial PRIMARY KEY,\n  embedding vector(1536)\n);\n\n-- HNSW index using cosine distance\nCREATE INDEX documents_embedding_hnsw_idx\n  ON documents\n  USING hnsw (embedding vector_cosine_ops)\n  WITH (m = 16, ef_construction = 200);\n```",
+      "diff": {
+        "improvements": [
+          "Documents operator classes halfvec_cosine_ops and sparsevec_cosine_ops",
+          "Lists type limits: vector ≤2000, halfvec ≤4000, bit ≤64000, sparsevec ≤1000",
+          "Recommends CREATE INDEX CONCURRENTLY for production builds",
+          "Shows using the distance operator '<=>' to make queries use the HNSW index",
+          "Notes HNSW needs no training step (indexes can be built on empty tables)"
+        ],
+        "avoided": [
+          "Includes undocumented WITH options (m = 16, ef_construction = 200) that README doesn't specify",
+          "Hardcodes an example vector(1536) as authoritative instead of noting type limits",
+          "Adds build-time index parameters/name without mentioning CONCURRENTLY or doc-backed options"
+        ],
+        "verdict": "NiaHub added exact operator-class names, type/dimension limits, CONCURRENTLY advice, and '<=>' query usage."
       }
     },
     {
@@ -205,6 +325,21 @@
         ],
         "follow_up_questions": [],
         "retrieval_log_id": "54b2f328-6b86-4417-bce2-09d3e71b4dd6"
+      },
+      "baseline": "-- Create table with a generated tsvector column (keeps itself up-to-date)\nCREATE TABLE documents (\n  id serial PRIMARY KEY,\n  title text,\n  body  text,\n  -- generated column combines weighted tsvectors for title (A) and body (B)\n  document_tsv tsvector GENERATED ALWAYS AS (\n    setweight(to_tsvector('english', coalesce(title, '')), 'A') ||\n    setweight(to_tsvector('english', coalesce(body,  '')), 'B')\n  ) STORED\n);\n\n-- GIN index for fast full-text search\nCREATE INDEX documents_document_tsv_gin ON documents USING GIN (document_tsv);\n\n-- Insert examples (document_tsv is maintained automatically)\nINSERT INTO documents (title, body) VALUES\n  ('Postgres full text', 'Using tsvector generated columns is convenient.'),\n  ('Search tips', 'Indexing with GIN and ranking results with ts_rank.');\n\n-- Search: match and rank results\nSELECT id, title, ts_rank(document_tsv, plainto_tsquery('english','full text')) AS rank\nFROM documents\nWHERE document_tsv @@ plainto_tsquery('english', 'full text')\nORDER BY rank DESC;\n\n-- Updating a source column updates the generated tsvector automatically\nUPDATE documents SET body = body || ' More text to index.' WHERE id = 1;\n\n-- If you need language per-row you can replace the fixed 'english' with a regconfig column,\n-- e.g. to_tsvector(lang_column::regconfig, ...), and use the same generated-column approach.",
+      "diff": {
+        "improvements": [
+          "Added ts_headline usage: ts_headline('english', body, query, 'MaxWords=50') for snippets",
+          "Provided hybrid example with embedding vector(1536) and hnsw index using vector_cosine_ops",
+          "Showed multi-weighted search_vector combining title(A), body(B), author(C) via setweight",
+          "Uses to_tsquery as a query param (FROM to_tsquery(...) AS query) for reuse in ts_rank/WHERE"
+        ],
+        "avoided": [
+          "Avoided inlining plainto_tsquery('english','...') into ts_rank/WHERE, enabling query reuse & snippets",
+          "Avoided relying solely on concatenated to_tsvector by showing per-field setweight(title/body/author)",
+          "Avoided a single-index view by adding GIN for tsvector and hnsw for embedding (hybrid search)"
+        ],
+        "verdict": "NiaHub added pgvector hybrid examples, ts_headline snippets, multi-field setweighting, and reusable to_tsquery usage."
       }
     }
   ],
@@ -220,6 +355,21 @@
           "https://github.com/boto/boto3/issues/3372",
           "https://github.com/aws/aws-sdk-js-v3/blob/main/packages/s3-request-presigner/README.md"
         ]
+      },
+      "baseline": "```python\nimport boto3\nimport requests  # optional, for demonstrating upload\n\ndef generate_presigned_put(bucket_name, object_key, expires_seconds=600, region=None):\n    \"\"\"\n    Returns a pre-signed PUT URL valid for expires_seconds (default 600 = 10 minutes).\n    \"\"\"\n    session = boto3.session.Session()\n    s3 = session.client('s3', region_name=region) if region else session.client('s3')\n    url = s3.generate_presigned_url(\n        ClientMethod='put_object',\n        Params={'Bucket': bucket_name, 'Key': object_key},\n        ExpiresIn=expires_seconds\n    )\n    return url\n\n# Example usage:\nif __name__ == \"__main__\":\n    bucket = \"my-bucket\"\n    key = \"path/to/object.txt\"\n    url = generate_presigned_put(bucket, key, expires_seconds=600)\n    print(\"Presigned PUT URL:\", url)\n\n    # Optional: upload data using the presigned URL\n    r = requests.put(url, data=b\"hello world\")\n    print(\"Upload status:\", r.status_code)\n```\n\nThis generates a presigned PUT URL valid for 10 minutes (600 seconds).",
+      "diff": {
+        "improvements": [
+          "Sets HttpMethod='PUT' so the presigned URL permits PUT requests",
+          "Includes Params['ContentType'] and notes client must send identical Content-Type header",
+          "Notes ServerSideEncryption ('aws:kms') and SSEKMSKeyId Params for SSE-KMS buckets",
+          "Mentions Config(signature_version='s3') for legacy SigV2 needs"
+        ],
+        "avoided": [
+          "Avoids omitting HttpMethod, preventing possible method-mismatch errors",
+          "Avoids implying uploads can omit matching Content-Type header (Params['ContentType'])",
+          "Avoids ignoring SSE-KMS and signature_version details (ServerSideEncryption, SSEKMSKeyId)"
+        ],
+        "verdict": "NiaHub changed: added explicit HttpMethod, ContentType enforcement, SSE-KMS and signature_version guidance."
       }
     },
     {
@@ -232,6 +382,22 @@
           "https://docs.aws.amazon.com/AmazonS3/latest/userguide/mpuoverview.html",
           "https://github.com/aws/aws-sdk-js-v3/blob/main/lib/lib-storage/README.md"
         ]
+      },
+      "baseline": "Python (boto3) — resume a failed multipart upload by reusing the UploadId, skipping already-uploaded parts (via list_parts), uploading missing parts, then completing. Saves minimal state locally so you can retry after a network failure.\n\n```python\nimport os, json, math, boto3\n\ndef resume_multipart_upload(bucket, key, filename, part_size=8 * 1024 * 1024, state_path=None):\n    \"\"\"\n    Resume or start a multipart upload and complete it.\n    - Saves upload state to filename+\".upload\" (or state_path) so retries resume after failure.\n    \"\"\"\n    s3 = boto3.client(\"s3\")\n    if state_path is None:\n        state_path = filename + \".upload\"\n\n    # load or create multipart upload\n    if os.path.exists(state_path):\n        state = json.load(open(state_path, \"r\"))\n        upload_id = state[\"UploadId\"]\n    else:\n        resp = s3.create_multipart_upload(Bucket=bucket, Key=key)\n        upload_id = resp[\"UploadId\"]\n        state = {\"UploadId\": upload_id, \"Parts\": {}}\n        json.dump(state, open(state_path, \"w\"))\n\n    # get list of parts already saved on S3 for this upload id\n    parts_on_s3 = {}\n    paginator = s3.get_paginator(\"list_parts\")\n    for page in paginator.paginate(Bucket=bucket, Key=key, UploadId=upload_id):\n        for p in page.get(\"Parts\", []):\n            parts_on_s3[p[\"PartNumber\"]] = p[\"ETag\"]\n\n    file_size = os.path.getsize(filename)\n    total_parts = math.ceil(file_size / part_size)\n    final_parts = []\n\n    try:\n        with open(filename, \"rb\") as f:\n            for part_number in range(1, total_parts + 1):\n                if part_number in parts_on_s3:\n                    etag = parts_on_s3[part_number]\n                    print(f\"Skipping already uploaded part {part_number}\")\n                else:\n                    f.seek((part_number - 1) * part_size)\n                    chunk = f.read(part_size)\n                    resp = s3.upload_part(\n                        Bucket=bucket,\n                        Key=key,\n                        PartNumber=part_number,\n                        UploadId=upload_id,\n                        Body=chunk,\n                    )\n                    etag = resp[\"ETag\"]\n                    # persist the uploaded part info so we can resume later if needed\n                    state[\"Parts\"][str(part_number)] = etag\n                    json.dump(state, open(state_path, \"w\"))\n                    print(f\"Uploaded part {part_number}\")\n\n                final_parts.append({\"PartNumber\": part_number, \"ETag\": etag})\n    except Exception as e:\n        print(\"Upload interrupted:\", e)\n        print(\"You can re-run this function to resume.\")\n        return\n\n    # complete multipart upload\n    s3.complete_multipart_upload(\n        Bucket=bucket,\n        Key=key,\n        UploadId=upload_id,\n        MultipartUpload={\"Parts\": final_parts},\n    )\n    print(\"Completed multipart upload.\")\n    try:\n        os.remove(state_path)\n    except OSError:\n        pass\n\n# Example usage:\n# resume_multipart_upload(\"my-bucket\", \"my/large-object.bin\", \"/local/path/large-file.bin\")\n```\n\nNotes:\n- The code keeps a small local state file holding UploadId and uploaded parts so retries continue where they left off.\n- On network failure, rerun the same function: it lists S3 parts and only uploads missing ones.\n- You can extend to abort stale uploads (s3.abort_multipart_upload) or add retries/backoff as needed.",
+      "diff": {
+        "improvements": [
+          "Uses list_multipart_uploads to locate an existing UploadId (API: list_multipart_uploads / UploadId)",
+          "Calls list_parts and relies on PartNumber and ETag before re-uploading (fields: PartNumber, ETag)",
+          "Sorts MultipartUpload.Parts by PartNumber before complete_multipart_upload (field: MultipartUpload.Parts)",
+          "Calls out S3 requirement: each part except the last must be >= 5 MiB (per S3 MPU docs)",
+          "Recommends AbortIncompleteMultipartUpload lifecycle rule to auto-clean stalled uploads"
+        ],
+        "avoided": [
+          "Avoids relying solely on a local .upload state file as the only source of UploadId",
+          "Avoids omitting billing/cleanup guidance by recommending AbortIncompleteMultipartUpload",
+          "Avoids missing the 5 MiB minimum part-size requirement from the S3 MPU docs"
+        ],
+        "verdict": "NiaHub added concrete MPU practices: find UploadId via list_multipart_uploads, honor PartNumber/ETag, enforce 5 MiB parts, sort Parts, and recommend AbortIncompleteMultipartUpload."
       }
     }
   ],
@@ -246,6 +412,22 @@
           "https://tailwindcss.com/blog/tailwindcss-v4",
           "https://github.com/tailwindlabs/tailwindcss/blob/main/CHANGELOG.md"
         ]
+      },
+      "baseline": "Please paste your current tailwind.config.js so I can produce an exact v4 CSS‑first migration. \n\nWhile you paste it, here’s a minimal CSS‑first v4 template I’ll adapt your settings into (I’ll replace placeholders with your values):\n\n```js\n// tailwind.config.cjs  (CSS‑first v4 style)\nimport { defineConfig } from 'tailwindcss'\n\nexport default defineConfig({\n  // file globs to scan for classes (migrate from `content`/`purge`)\n  files: [\n    './src/**/*.{html,js,ts,jsx,tsx,vue,svelte}',\n  ],\n\n  // CSS‑first: list your entry CSS files that import Tailwind layers\n  css: [\n    './src/styles/tailwind.css', // <-- your main CSS that contains @tailwind base/components/utilities\n  ],\n\n  // theme tokens and extensions (copied/translated from your v3 `theme` block)\n  theme: {\n    extend: {\n      // ...your colors, spacing, screens, etc.\n    },\n  },\n\n  // core plugins and feature flags\n  corePlugins: {\n    // enable/disable core utilities if you did in v3\n  },\n\n  // plugin list (migrate directly from v3 `plugins`)\n  plugins: [\n    // require('@tailwindcss/forms'), etc.\n  ],\n\n  // optional: safelist patterns or extractor options (if used in v3)\n  safelist: [\n    // 'prose', /^bg-/,\n  ],\n})\n```\n\nPaste your v3 config and I’ll return the exact migrated v4 CSS‑first file.",
+      "diff": {
+        "improvements": [
+          "Explains the new @theme CSS directive and that config lives in CSS now",
+          "Shows exact token mapping (e.g. colors.brand.500 → --color-brand-500) with examples",
+          "Notes v4 removes the content array and auto-detects template files",
+          "Calls out PostCSS plugin rename to @tailwindcss/postcss and to update config",
+          "Recommends running npx @tailwindcss/upgrade@next to automate the migration"
+        ],
+        "avoided": [
+          "Avoids proposing an ESM export default inside a .cjs file (module type mismatch)",
+          "Doesn't keep treating the config as a JS-first defineConfig file when v4 is CSS-first",
+          "Doesn't instruct retaining v3 content/purge listing (outdated for v4)"
+        ],
+        "verdict": "NiaHub moved v3 JS config into v4 CSS-first: tokens to @theme CSS vars, removed content, and updated the PostCSS plugin."
       }
     },
     {
@@ -258,6 +440,21 @@
           "https://tailwindcss.com/blog/tailwindcss-v4",
           "https://github.com/tailwindlabs/tailwindcss/discussions/14000"
         ]
+      },
+      "baseline": "Which tool/environment do you mean by the new @theme directive (CSS, Tailwind, a preprocessor, a framework)? I can show a concise example for that target — please specify.\n\nIf you want a short, generic example (declaring a palette and consuming it via generated CSS variables), here’s a code-first snippet you can adapt:\n\n/* define a palette with @theme (generic/design-token style) */\n@theme palette {\n  colors: {\n    primary: #1e40af;\n    primary-600: #1e3a8a;\n    secondary: #7c3aed;\n    neutral-100: #f3f4f6;\n    neutral-900: #0f172a;\n  }\n}\n\n/* expose tokens as CSS variables (tooling would normally emit this) */\n:root {\n  --color-primary: theme(palette.colors.primary);\n  --color-primary-600: theme(palette.colors['primary-600']);\n  --color-secondary: theme(palette.colors.secondary);\n  --color-neutral-100: theme(palette.colors['neutral-100']);\n  --color-neutral-900: theme(palette.colors['neutral-900']);\n}\n\n/* consume the palette */\n.btn {\n  background: var(--color-primary);\n  color: var(--color-neutral-100);\n  border: 1px solid var(--color-primary-600);\n}\n\nTell me which specific system (Tailwind, Svelte, a CSS design-token plugin, etc.) and I’ll give a minimal exact example for that platform.",
+      "diff": {
+        "improvements": [
+          "Cites Tailwind v4 and official docs/blog for @theme",
+          "Provides a real @theme CSS example using --variables",
+          "Shows token-to-utility mapping (e.g., --color-brand-500 -> text-brand-500)",
+          "Mentions light/dark variants via scoped @theme blocks"
+        ],
+        "avoided": [
+          "Did not use a fictional theme(...) CSS function",
+          "Did not invent '@theme palette { colors: { ... } }' object syntax",
+          "Did not claim tooling would magically emit CSS without Tailwind v4 features"
+        ],
+        "verdict": "NiaHub (Tailwind v4) adds an @theme directive to declare CSS tokens (--color-brand-500, --font-display) and auto-generate utilities like text-brand-500."
       }
     }
   ],
@@ -291,6 +488,22 @@
         ],
         "follow_up_questions": [],
         "retrieval_log_id": "a80c017e-d779-4894-9307-6042c18c3129"
+      },
+      "baseline": "TypeScript — code-first. Two parts: (A) a generic Tool interface + an implementation that streams progress via a callback (suitable when the host is an in-process caller), and (B) an HTTP Server-Sent Events (SSE) endpoint that uses the same tool to stream progress to a remote host (client).\n\nA. Tool interface + example implementation\n```ts\ntype Progress = { step: number; total: number; percent: number; message?: string };\n\ninterface Tool<I, O> {\n  run(input: I, onProgress?: (p: Progress) => void): Promise<O>;\n}\n\n/** Example long-running tool that emits progress as it works */\nclass ExampleLongTask implements Tool<{ steps: number }, { result: string }> {\n  async run(input: { steps: number }, onProgress?: (p: Progress) => void) {\n    const total = Math.max(1, Math.floor(input.steps));\n    for (let step = 1; step <= total; step++) {\n      // simulate async work\n      await new Promise((r) => setTimeout(r, 300));\n      const progress: Progress = {\n        step,\n        total,\n        percent: Math.round((step / total) * 100),\n        message: `Completed step ${step}/${total}`,\n      };\n      if (onProgress) onProgress(progress);\n    }\n    return { result: `Finished ${total} steps` };\n  }\n}\n\n/** In-process usage */\n(async () => {\n  const tool = new ExampleLongTask();\n  const output = await tool.run({ steps: 5 }, (p) => console.log('progress:', p));\n  console.log('output:', output);\n})();\n```\n\nB. Expose the tool over HTTP via Server-Sent Events (SSE) to stream progress to a remote host/client\n```ts\nimport http from 'http';\nimport url from 'url';\n\nconst tool = new ExampleLongTask();\n\nconst server = http.createServer(async (req, res) => {\n  const parsed = url.parse(req.url || '', true);\n  if (parsed.pathname === '/run') {\n    // SSE headers\n    res.writeHead(200, {\n      'Content-Type': 'text/event-stream',\n      'Cache-Control': 'no-cache',\n      Connection: 'keep-alive',\n    });\n    res.write('\\n');\n\n    const steps = Number(parsed.query.steps) || 5;\n\n    // progress callback writes SSE messages\n    const onProgress = (p: Progress) => {\n      res.write(`event: progress\\n`);\n      res.write(`data: ${JSON.stringify(p)}\\n\\n`);\n    };\n\n    try {\n      const output = await tool.run({ steps }, onProgress);\n      res.write(`event: done\\n`);\n      res.write(`data: ${JSON.stringify(output)}\\n\\n`);\n    } catch (err) {\n      res.write(`event: error\\n`);\n      res.write(`data: ${JSON.stringify({ message: String(err) })}\\n\\n`);\n    } finally {\n      // close stream\n      res.end();\n    }\n    return;\n  }\n\n  res.writeHead(404);\n  res.end('Not found');\n});\n\nserver.listen(3000, () => console.log('SSE server listening on http://localhost:3000/run?steps=5'));\n```\n\nClient (browser) example to receive the stream:\n```js\nconst es = new EventSource('/run?steps=5');\nes.addEventListener('progress', (e) => console.log('progress', JSON.parse(e.data)));\nes.addEventListener('done', (e) => { console.log('done', JSON.parse(e.data)); es.close(); });\nes.addEventListener('error', (e) => { console.error('error', e); es.close(); });\n```\n\nNotes:\n- The Tool interface is generic and lets hosts receive progress via a callback.\n- SSE example shows how to stream JSON progress events over HTTP to a remote host. You can replace SSE with WebSocket or gRPC streaming if desired.",
+      "diff": {
+        "improvements": [
+          "Uses McpServer from @modelcontextprotocol/sdk instead of ad‑hoc HTTP",
+          "Validates tool args with LongRunningOperationSchema (z.object) vs untyped inputs",
+          "Requires _meta.progressToken to opt into progress notifications",
+          "Emits structured notifications via method \"notifications/progress\" with progress/total/progressToken",
+          "Correlates notifications using extra.requestId when calling server.notification"
+        ],
+        "avoided": [
+          "Avoided raw SSE-only pattern without request correlation or SDK types",
+          "Avoided untyped callback pattern; uses CallToolRequestSchema and zod validation",
+          "Avoided implicit progress delivery; progress requires explicit _meta.progressToken opt-in"
+        ],
+        "verdict": "NiaHub replaced ad‑hoc SSE with MCP-based progress notifications using _meta.progressToken, \"notifications/progress\", and extra.requestId correlation."
       }
     },
     {
@@ -322,6 +535,22 @@
         ],
         "follow_up_questions": [],
         "retrieval_log_id": "5ac86a56-9598-4def-a7a2-75c144f966be"
+      },
+      "baseline": "```ts\n// TypeScript — example showing how to expose a resource using @modelcontextprotocol/sdk Server\nimport { Server } from '@modelcontextprotocol/sdk';\n\n// Create the Server instance\nconst server = new Server({\n  name: 'example-server',\n  description: 'Example MCP server exposing a \"notes\" resource',\n});\n\n// Define a resource and its handlers. The exact handler names/shape below are the\n// minimal sensible contract used by MCP-style servers: list, get, and call (action).\nconst notesResource = {\n  id: 'notes',                // canonical resource id\n  title: 'Notes',\n  description: 'Simple notes resource',\n  // optional JSON schema for items (useful for UIs / validation)\n  schema: {\n    type: 'object',\n    properties: {\n      id: { type: 'string' },\n      text: { type: 'string' },\n      createdAt: { type: 'string', format: 'date-time' },\n    },\n    required: ['id', 'text', 'createdAt'],\n  },\n\n  // Handlers the Server will call when the MCP controller asks for operations\n  handlers: {\n    // return a list of items (support paging/filters via params if needed)\n    list: async (params = {}) => {\n      // Replace with real data access\n      return [\n        { id: '1', text: 'First note', createdAt: new Date().toISOString() },\n        { id: '2', text: 'Second note', createdAt: new Date().toISOString() },\n      ];\n    },\n\n    // return a single item by id\n    get: async ({ id }: { id: string }) => {\n      // Replace with real data access\n      return { id, text: `Note ${id}`, createdAt: new Date().toISOString() };\n    },\n\n    // an example action/call on the resource (e.g., create)\n    call: async ({ action, input }: { action: string; input: any }) => {\n      if (action === 'create') {\n        const created = {\n          id: String(Date.now()),\n          text: input.text,\n          createdAt: new Date().toISOString(),\n        };\n        // persist created...\n        return created;\n      }\n      throw new Error(`Unknown action ${action}`);\n    },\n  },\n};\n\n// Expose the resource on the Server\nserver.exposeResource(notesResource);\n\n// Start listening (API may be `start()` or `listen()`, adapt if your SDK uses a different method)\nawait server.listen?.(0) ?? await server.start?.();\n\nconsole.log('MCP Server started and \"notes\" resource exposed');\n```\n\nIf your SDK has different method names, substitute server.exposeResource -> server.expose or server.registerResource, and server.listen/start accordingly. The key pieces are: construct Server, provide a resource descriptor (id, schema, handlers), and call the Server method to expose/register it.",
+      "diff": {
+        "improvements": [
+          "imports Server from @modelcontextprotocol/sdk/server/index.js (correct module path)",
+          "uses setRequestHandler with ListResourcesRequestSchema and ReadResourceRequestSchema (SDK request types)",
+          "connects via StdioServerTransport and server.connect(transport) instead of fictional server.start/listen",
+          "declares capabilities.resources and listChanged, and uses ListResourceTemplatesRequestSchema for templates",
+          "returns contents array with uri, mimeType, and text matching ReadResourceResult/Resource shape"
+        ],
+        "avoided": [
+          "No server.exposeResource or handlers.list/get/call — avoids inventing an unsupported handlers API",
+          "No assumption of server.start() / server.listen() lifecyle — uses server.connect + transport instead",
+          "Doesn't invent a resource 'schema' field on Resource; uses documented Resource fields like uri and mimeType"
+        ],
+        "verdict": "NiaHub replaced a fictional exposeResource/handlers pattern with schema-based setRequestHandler and StdioServerTransport usage."
       }
     }
   ],
@@ -336,6 +565,21 @@
           "https://docs.trynia.ai/sources/repository",
           "https://docs.trynia.ai/integrations/installation/overview"
         ]
+      },
+      "baseline": "Below is a concise, code-first recipe (single Node.js script) that (1) clones a private GitHub repo, (2) chunks files and indexes them into a generic Nia-compatible embedding/vector index via HTTP, and (3) exposes a tiny MCP-compatible HTTP endpoint that Cursor can call to query the Nia index. Replace the placeholder endpoints and keys with your actual Nia and Cursor/MCP config.\n\nSave as index_and_mcp.js and run with NODE 18+.\n\nindex_and_mcp.js\n```javascript\n/**\n * Usage: \n *   GITHUB_TOKEN=ghp_xxx GITHUB_REPO=owner/repo NIA_API_KEY=nia_xxx NIA_BASE=https://nia.example.com INDEX_NAME=my-index MCP_PORT=3000 node index_and_mcp.js\n *\n * Notes:\n *  - This is a minimal, adaptable example. Replace the Nia endpoints (/v1/embeddings, /v1/indexes/:index/upsert, /v1/indexes/:index/search)\n *    to match your Nia deployment API surface.\n *  - MCP endpoint here is POST /mcp/query { query: string, top_k?: number } -> returns search hits for Cursor to consume.\n */\n\nimport { execSync } from \"child_process\";\nimport fs from \"fs\";\nimport path from \"path\";\nimport fetch from \"node-fetch\";\nimport express from \"express\";\n\nconst {\n  GITHUB_TOKEN,\n  GITHUB_REPO,\n  NIA_API_KEY,\n  NIA_BASE = \"https://nia.example.com\",\n  INDEX_NAME = \"github-repo-index\",\n  MCP_PORT = 3000,\n} = process.env;\n\nif (!GITHUB_TOKEN || !GITHUB_REPO || !NIA_API_KEY) {\n  console.error(\"Set GITHUB_TOKEN, GITHUB_REPO, and NIA_API_KEY environment variables.\");\n  process.exit(1);\n}\n\n/* STEP 1: clone private repo */\nconst CLONE_DIR = `/tmp/repo_${Date.now()}`;\nconsole.log(\"Cloning repo...\");\nexecSync(`git clone https://${GITHUB_TOKEN}@github.com/${GITHUB_REPO}.git ${CLONE_DIR}`, { stdio: \"inherit\" });\n\n/* STEP 2: read & chunk files */\nconst ALLOWED_EXT = new Set([\".md\", \".mdx\", \".txt\", \".js\", \".ts\", \".py\", \".java\", \".go\", \".json\", \".yaml\", \".yml\", \".html\"]);\nfunction walk(dir) {\n  const out = [];\n  for (const name of fs.readdirSync(dir)) {\n    const full = path.join(dir, name);\n    const st = fs.statSync(full);\n    if (st.isDirectory()) {\n      out.push(...walk(full));\n    } else {\n      if (ALLOWED_EXT.has(path.extname(name).toLowerCase())) out.push(full);\n    }\n  }\n  return out;\n}\nfunction chunkText(text, chunkSize = 1000, overlap = 200) {\n  const chunks = [];\n  let i = 0;\n  while (i < text.length) {\n    const chunk = text.slice(i, i + chunkSize);\n    chunks.push(chunk);\n    i += chunkSize - overlap;\n  }\n  return chunks;\n}\n\nconsole.log(\"Reading files and creating document chunks...\");\nconst files = walk(CLONE_DIR);\nconst documents = [];\nfor (const f of files) {\n  const raw = fs.readFileSync(f, \"utf8\");\n  const chunks = chunkText(raw, 1200, 200);\n  for (let i = 0; i < chunks.length; i++) {\n    documents.push({\n      id: `${path.relative(CLONE_DIR, f)}::${i}`,\n      text: chunks[i],\n      metadata: { path: path.relative(CLONE_DIR, f), repo: GITHUB_REPO },\n    });\n  }\n}\nconsole.log(`Prepared ${documents.length} document chunks`);\n\n/* STEP 3: helper functions to call Nia - embeddings, upsert, search.\n   Adjust endpoints to your Nia API. This example assumes:\n     POST ${NIA_BASE}/v1/embeddings  body { input: \"text\" } -> { data: [ { embedding: [..] } ] }\n     POST ${NIA_BASE}/v1/indexes/${INDEX_NAME}/upsert body { vectors: [ { id, values, metadata } ] }\n     POST ${NIA_BASE}/v1/indexes/${INDEX_NAME}/query body { vector, top_k } -> { matches: [ { id, score, metadata } ] }\n*/\n\nasync function getEmbedding(text) {\n  const res = await fetch(`${NIA_BASE}/v1/embeddings`, {\n    method: \"POST\",\n    headers: {\n      \"Authorization\": `Bearer ${NIA_API_KEY}`,\n      \"Content-Type\": \"application/json\",\n    },\n    body: JSON.stringify({ input: text }),\n  });\n  if (!res.ok) {\n    throw new Error(`Embedding error ${res.status}: ${await res.text()}`);\n  }\n  const j = await res.json();\n  // adapt as needed to Nia return shape\n  return j.data?.[0]?.embedding ?? j.embedding ?? null;\n}\n\nasync function upsertVectors(vectors) {\n  const res = await fetch(`${NIA_BASE}/v1/indexes/${encodeURIComponent(INDEX_NAME)}/upsert`, {\n    method: \"POST\",\n    headers: {\n      \"Authorization\": `Bearer ${NIA_API_KEY}`,\n      \"Content-Type\": \"application/json\",\n    },\n    body: JSON.stringify({ vectors }),\n  });\n  if (!res.ok) {\n    throw new Error(`Upsert error ${res.status}: ${await res.text()}`);\n  }\n  return res.json();\n}\n\nasync function searchVector(vector, top_k = 5) {\n  const res = await fetch(`${NIA_BASE}/v1/indexes/${encodeURIComponent(INDEX_NAME)}/query`, {\n    method: \"POST\",\n    headers: {\n      \"Authorization\": `Bearer ${NIA_API_KEY}`,\n      \"Content-Type\": \"application/json\",\n    },\n    body: JSON.stringify({ vector, top_k }),\n  });\n  if (!res.ok) {\n    throw new Error(`Search error ${res.status}: ${await res.text()}`);\n  }\n  return res.json();\n}\n\n/* Bulk index process (throttled) */\n(async () => {\n  console.log(\"Indexing into Nia...\");\n  const BATCH = 16;\n  for (let i = 0; i < documents.length; i += BATCH) {\n    const batch = documents.slice(i, i + BATCH);\n    const vectors = [];\n    // create embeddings sequentially or parallel (but avoid huge parallel)\n    for (const doc of batch) {\n      const emb = await getEmbedding(doc.text);\n      if (!emb) throw new Error(\"No embedding returned\");\n      vectors.push({ id: doc.id, values: emb, metadata: doc.metadata });\n    }\n    await upsertVectors(vectors);\n    console.log(`Upserted batch ${i}-${i + batch.length}`);\n  }\n  console.log(\"Indexing complete.\");\n\n  /* STEP 4: run a tiny MCP adapter for Cursor:\n     Expose POST /mcp/query with body { query: string, top_k?: number }\n     Cursor will call this endpoint; adapter embeds the query and runs Nia search, then returns hits.\n  */\n  const app = express();\n  app.use(express.json({ limit: \"1mb\" }));\n\n  app.post(\"/mcp/query\", async (req, res) => {\n    try {\n      const { query, top_k = 5 } = req.body;\n      if (!query) return res.status(400).json({ error: \"missing query\" });\n      const qEmb = await getEmbedding(query);\n      const search = await searchVector(qEmb, top_k);\n      // adapt response shape as your MCP consumer expects. This is a simple JSON array.\n      const hits = (search.matches || search.results || []).map(m => ({\n        id: m.id,\n        score: m.score ?? m.distance ?? 0,\n        metadata: m.metadata ?? {},\n      }));\n      return res.json({ query, hits });\n    } catch (err) {\n      console.error(err);\n      return res.status(500).json({ error: String(err) });\n    }\n  });\n\n  // Optional status endpoint Cursor might use to validate the connector.\n  app.get(\"/mcp/info\", (req, res) => {\n    res.json({ name: \"nia-github-mcp\", index: INDEX_NAME, repo: GITHUB_REPO });\n  });\n\n  app.listen(Number(MCP_PORT), () => {\n    console.log(`MCP adapter listening on http://0.0.0.0:${MCP_PORT}`);\n    console.log(\"MCP query endpoint: POST /mcp/query { query, top_k }\");\n  });\n})().catch(err => { console.error(err); process.exit(1); });\n```\n\nSummary (quick):\n- Provide GitHub token and repo; script clones it.\n- Script chunks files and obtains embeddings from Nia.\n- Vectors are upserted into a Nia index.\n- Script exposes a simple MCP HTTP adapter (/mcp/query) that Cursor can call to get vector-search hits from Nia.\n\nAdjust the Nia endpoint paths and returned JSON shapes to match your Nia deployment and adapt the MCP response shape to Cursor's exact requirements.",
+      "diff": {
+        "improvements": [
+          "Uses POST /v2/sources with fields 'type','repository','branch','display_name' for repo ingestion",
+          "Calls out GitHub App install requirement (GitHub App installation required) for private repos",
+          "Advises polling GET /v2/sources/{id} and checking the 'status' field until it reads 'indexed'",
+          "Provides Cursor MCP config using 'npx nia-mcp@latest' and env vars 'NIA_API_KEY' and 'NIA_DATA_SOURCES' in mcp.json"
+        ],
+        "avoided": [
+          "Avoids assuming /v1/embeddings and /v1/indexes/:index/upsert query endpoints that Nia docs don't prescribe",
+          "Avoids insecure pattern of embedding a GITHUB_TOKEN in an HTTPS git clone URL (git clone https://$GITHUB_TOKEN@github.com/...)",
+          "Avoids a homemade MCP HTTP server; uses the documented 'nia-mcp' integration instead of a custom endpoint"
+        ],
+        "verdict": "NiaHub replaces DIY cloning/embedding calls with POST /v2/sources (type,repository,branch), GitHub App auth, and nia-mcp (NIA_DATA_SOURCES)."
       }
     },
     {
@@ -348,6 +592,22 @@
           "https://docs.trynia.ai/api-reference/oracle/create-job",
           "https://docs.trynia.ai/api-reference/oracle/stream"
         ]
+      },
+      "baseline": "```python\n# Python example: \"NiaOracle\" that chooses between two indexes by creating each index,\n# running EXPLAIN (ANALYZE, FORMAT JSON) and picking the lower observed execution time.\n#\n# WARNING: this code creates/drops indexes on the target DB. Run on a test copy or\n# ensure you have appropriate permissions. CREATE INDEX CONCURRENTLY requires no transaction.\n\nimport json\nimport time\nimport psycopg2\n\nclass NiaOracle:\n    def __init__(self, dsn, runs=3, autocommit=True):\n        self.conn = psycopg2.connect(dsn)\n        self.conn.autocommit = autocommit\n        self.runs = runs\n\n    def _exec(self, sql, params=None):\n        with self.conn.cursor() as cur:\n            cur.execute(sql, params)\n            try:\n                return cur.fetchall()\n            except psycopg2.ProgrammingError:\n                return None\n\n    def _create_index(self, create_sql):\n        # expect full CREATE INDEX ... statement (prefer CONCURRENTLY if available)\n        self._exec(create_sql)\n        # small pause to let index become usable\n        time.sleep(0.5)\n\n    def _drop_index(self, index_name, if_exists=True):\n        sql = f\"DROP INDEX {'IF EXISTS ' if if_exists else ''}{index_name}\"\n        self._exec(sql)\n\n    def _measure_query(self, query):\n        # runs EXPLAIN (ANALYZE, FORMAT JSON) and returns execution time (ms)\n        rows = self._exec(f\"EXPLAIN (ANALYZE, FORMAT JSON) {query}\")\n        # rows[0][0] is a JSON string/list; parse it\n        plan_json = rows[0][0]\n        # plan_json is typically a list with one dict\n        if isinstance(plan_json, list):\n            doc = plan_json[0]\n        else:\n            doc = json.loads(plan_json)[0]\n        # prefer top-level 'Execution Time' if present, else Plan['Actual Total Time']\n        exec_time = doc.get(\"Execution Time\")\n        if exec_time is None:\n            plan = doc.get(\"Plan\", {})\n            exec_time = plan.get(\"Actual Total Time\")\n        return float(exec_time)\n\n    def evaluate_index(self, query, index_name, create_sql):\n        try:\n            self._create_index(create_sql)\n            times = []\n            for _ in range(self.runs):\n                t = self._measure_query(query)\n                times.append(t)\n            avg = sum(times) / len(times)\n            return {\"index\": index_name, \"avg_ms\": avg, \"raw_ms\": times}\n        finally:\n            # remove index to revert database to original state\n            try:\n                self._drop_index(index_name)\n            except Exception:\n                pass\n\n    def choose(self, query, index_options):\n        # index_options: list of dicts: {\"name\": \"idx_x\", \"create_sql\": \"CREATE INDEX ...\"}\n        results = []\n        for opt in index_options:\n            r = self.evaluate_index(query, opt[\"name\"], opt[\"create_sql\"])\n            results.append(r)\n        # pick lowest avg_ms\n        best = min(results, key=lambda x: x[\"avg_ms\"])\n        return {\"best_index\": best[\"index\"], \"results\": results}\n\n# Example usage:\nif __name__ == \"__main__\":\n    DSN = \"host=localhost dbname=mydb user=myuser password=mypw\"\n    oracle = NiaOracle(DSN, runs=2)\n\n    sql_query = \"SELECT * FROM orders WHERE customer_id = 123 AND created_at >= '2025-01-01';\"\n\n    indexes = [\n        {\"name\": \"idx_orders_customer\", \"create_sql\": \"CREATE INDEX CONCURRENTLY idx_orders_customer ON orders(customer_id)\"},\n        {\"name\": \"idx_orders_customer_created\", \"create_sql\": \"CREATE INDEX CONCURRENTLY idx_orders_customer_created ON orders(customer_id, created_at)\"},\n    ]\n\n    decision = oracle.choose(sql_query, indexes)\n    print(\"Chosen index:\", decision[\"best_index\"])\n    print(\"All results:\", decision[\"results\"])\n```",
+      "diff": {
+        "improvements": [
+          "Uses POST /v2/oracle/jobs and returns a job_id",
+          "Accepts JSON fields 'query', 'data_sources', and 'output_format'",
+          "Polls job status (status='completed') and reads result.answer and result.recommendations",
+          "Supports live streaming via GET /v2/oracle/jobs/$JOB_ID/stream (curl -N)",
+          "Documents NiaHub /recommend flow: candidate pack IDs → 3 picks with rationale + confidence"
+        ],
+        "avoided": [
+          "Doesn't create/drop DB indexes on the target database",
+          "Avoids fragile EXPLAIN (ANALYZE) JSON parsing and top-level 'Execution Time' assumptions",
+          "Avoids incorrect psycopg2 usage like connect(..., autocommit=True) and concurrency pitfalls"
+        ],
+        "verdict": "NiaHub replaces ad-hoc DB index probing with the Oracle API (/v2/oracle/jobs, data_sources, stream) and a deterministic fallback."
       }
     }
   ]
