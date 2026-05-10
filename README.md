@@ -5,6 +5,105 @@
 > can subscribe to with a single paste. Stripe, React, Next.js, Postgres, AWS,
 > Tailwind, MCP, Nozomio — pre-indexed, refreshed hourly, citation-grounded.
 
+● NiaHub — for grown-ups
+
+  The problem
+
+  LLM coding agents (Cursor, Claude Code, Codex) are great at code shape but bad at currentness. They're trained on a snapshot of the internet from months
+  or years ago, and they confidently produce API calls that were renamed, deprecated, or never existed. The fix is retrieval grounding — feed the agent
+  live, indexed documentation at query time so it cites real sources instead of pattern-matching against stale memory.
+
+  Nia (https://trynia.ai) does this well. It's an indexing service with an MCP (Model Context Protocol) layer: point it at docs and repos, it produces
+  vectorized + BM25-indexed corpora, and any MCP-compatible agent can query them at inference time. Solves the hallucination problem cleanly — if you set it
+   up.
+
+  That last clause is the wedge. Setting Nia up is doable but friction-laden:
+  - Each developer picks the right docs URLs and repo branches themselves
+  - Indexing takes minutes per source; you wait
+  - You wire MCP into Cursor's mcp.json, debug auth, restart
+  - Indexes drift stale within a week — nobody re-runs them
+  - Picking what to index (the curation) is the actual hard part, not the indexer
+
+  The result: everyone re-indexes the same Stripe / React / Postgres docs from scratch on their own laptop, the indexes go stale, and most teams never
+  finish the setup. Wasted compute × no maintenance × duplicated curation work.
+
+  What NiaHub is
+
+  A marketplace of pre-curated, continuously refreshed Nia indexes ("packs") that any MCP-compatible agent subscribes to with one paste. We do the curation,
+   the indexing, the maintenance, and the auditing — once — so every developer can just install:
+
+  // ~/.cursor/mcp.json
+  {
+    "mcpServers": {
+      "niahub-stripe": {
+        "command": "npx",
+        "args": ["-y", "niahub-mcp@latest"],
+        "env": { "NIAHUB_PACK": "stripe-api-current", "NIAHUB_TOKEN": "tok_…" }
+      }
+    }
+  }
+
+  Restart Cursor. Now the agent has a niahub_search_pack tool scoped to live, hourly-refreshed Stripe docs + the stripe/stripe-node SDK + the Stripe
+  changelog. Ask anything Stripe-shaped and you get cited code that actually works against the current API.
+
+  The architecture
+
+  Cursor → niahub-mcp (stdio) → /api/mcp/<pack_id> → Nia /v2/search (mode=query, scoped)
+                                                    → OpenAI gpt-5-mini (why-this-answer trace)
+                                                    → InsForge Postgres (subs + query_events)
+                                                    → Convex feed_events (live ticker)
+
+  A few non-trivial pieces:
+
+  - Per-pack scoping: Nia's mode=universal searches the whole account, which leaks unrelated indexes (we saw razorpay docs surfacing inside Stripe queries).
+   We use mode=query with data_sources: [<pack URLs>] and repositories: [<pack repos>] so each pack hits only its own corpus.
+  - Snapshot-first gateway: every canonical demo query has a frozen real-Nia response cached in apps/web/lib/nia/snapshots.json (along with the baseline
+  gpt-5-mini answer and a compareAnswers diff). When the gateway sees one of the 17 preloaded keywords (trial, webhook, pgvector, @theme…), it returns the
+  cached payload in <300 ms and skips the network entirely. Lets the demo work even if Nia and OpenAI are simultaneously down.
+  - Hallucination delta: gpt-5-mini grades each pack nightly against a question bank — once with no context, once with the pack's top-k chunks — and we
+  publish the delta as the pack's "hallucination score." Visible on every pack page next to a side-by-side compare feature where you can see, on the same
+  query, the model hallucinating without grounding vs producing cited code with grounding. The diff is itself summarized by gpt-5-mini ("Added by grounding:
+   pinned apiVersion: '2024-09-30.acacia', used subscription_data.trial_settings.end_behavior. Hallucinations avoided: left trial end behavior undefined…").
+  - Tensorlake refresh: each pack declares a cadence (hourly / daily / on-webhook). A scheduled job spins a Tensorlake µVM, runs a Python script that calls
+  Nia's per-source sync endpoints inside the sandbox, and persists the run to a refresh_runs table. Sandboxed so a malformed source page can't poison the
+  global state.
+  - Devin curator: anyone can publish a new pack via /create. Drop URLs + a description, we dispatch a real Devin session that crawls each source, dedups,
+  drafts pack metadata + 30 benchmark questions, and opens a draft. Human approves and it goes live. This is how the marketplace scales from 8 packs to 800
+  without us writing each one.
+  - Hyperspell pro tier: the same pack abstraction, but the source is a user's own Slack / Gmail / Drive / GitHub via Hyperspell's OAuth flow. Their
+  company's institutional knowledge becomes a private Nia-readable index, scoped to their subscription only. Solves the "company brain" use case as a simple
+   extension of the marketplace.
+
+  Three demo paths
+
+  We didn't put the whole demo on one risky path. Three independent flows, all live:
+
+  1. /playground — pure browser, no Cursor setup. Pick a pack, type a question, get the cached answer + side-by-side hallucination diff in <5 s. The "judges
+   play with this themselves" path.
+  2. Cursor MCP — paste the snippet, restart Cursor, ask. ~60 s end-to-end for a first-time user. The "this isn't fake" path.
+  3. /recommend — describe your stack or paste a package.json. Nia Oracle picks the 3 best packs with rationale + confidence and emits a single combined
+  install snippet. The "decision-free" path.
+
+  What's actually verified live
+
+  pwsh -NoProfile -File scripts/e2e.ps1
+  # 52 / 52 passed
+  # All sponsors live, end-to-end.
+
+  The suite hits each sponsor's real API, asserts on real DB rows landing in InsForge Postgres, real sandboxes spinning at Tensorlake, real Devin sessions
+  appearing at app.devin.ai/sessions/<id>, real Convex feed_events rows showing up after a subscribe, real gpt-5-mini responses landing in the audit
+  endpoint. Production-ready in the literal sense — anyone in the room can sign up via the linked InsForge dashboard and install a pack into their own
+  Cursor in <60 s.
+
+  The strategic claim
+
+  NiaHub isn't a better Nia. It's the distribution layer for Nia. Every install is a recurring Nia query. Every query is a citation back to canonical docs.
+  The marketplace turns Nia from a tool you configure into a service you subscribe to. Every pack is a billboard. The wedge is that the curation work, not
+  the indexing work, is what's been keeping Nia from defaulting to "every Cursor session, every Claude Code window, every Codex job."
+
+  Today: 8 launch packs, 17 preloaded queries, all 8 sponsor APIs hit live in the demo, full offline resilience for the canonical flows. Eight weeks: 800
+  packs via Devin, private company packs via Hyperspell, and a "powered by Nia" pixel in every grounded answer the marketplace serves.
+
 **Built for the Nozomio Hackathon · May 9, 2026 · San Francisco**
 
 [![e2e](https://img.shields.io/badge/e2e-52%2F52-success)](scripts/e2e.ps1)
