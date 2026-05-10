@@ -7,11 +7,18 @@ import type { DemoPrompt } from '@/lib/demo-prompts';
 // demo prompts; click → real answer streams in (well, returns) below. Doubles
 // as the "Side-by-side: with vs without NiaHub" toggle.
 
+interface AnswerDiff {
+  improvements: string[];
+  avoided: string[];
+  verdict: string;
+}
+
 interface PlaygroundResp {
   answer: string;
   citations: string[];
   why: string;
   baseline: string | null;
+  diff: AnswerDiff | null;
   latency_ms: number;
   chunks_used: number;
 }
@@ -117,9 +124,52 @@ export function TryIt({ packId, prompts }: { packId: string; prompts: DemoPrompt
               <Column body={resp.answer} citations={resp.citations} footer={`${resp.chunks_used} chunks · ${resp.latency_ms} ms`} />
             </div>
           )}
+          {compare && resp.diff && <DiffSummary diff={resp.diff} />}
           <div className="border-t border-white/5 px-4 py-3 text-[11px] text-white/55">
             <span className="text-white/35">why:</span> {resp.why}
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DiffSummary({ diff }: { diff: AnswerDiff }) {
+  const empty = diff.improvements.length === 0 && diff.avoided.length === 0;
+  if (empty && !diff.verdict) return null;
+  return (
+    <div className="border-t border-white/5 bg-gradient-to-br from-emerald-500/[0.04] to-fuchsia-500/[0.04] px-4 py-4">
+      <div className="flex items-center gap-2">
+        <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: 'linear-gradient(90deg,#34d399,#a855f7)' }} />
+        <span className="text-[11px] uppercase tracking-wide text-white/65">What NiaHub improved</span>
+      </div>
+      {diff.verdict && (
+        <p className="mt-2 text-sm text-white/85">{diff.verdict}</p>
+      )}
+      {diff.improvements.length > 0 && (
+        <div className="mt-3">
+          <div className="text-[11px] uppercase tracking-wide text-emerald-300/85">Added by grounding</div>
+          <ul className="mt-1.5 space-y-1">
+            {diff.improvements.map((s, i) => (
+              <li key={i} className="flex items-start gap-2 text-[12.5px] text-white/85">
+                <span className="mt-1.5 inline-block h-1 w-1 flex-none rounded-full bg-emerald-400" />
+                <span>{s}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {diff.avoided.length > 0 && (
+        <div className="mt-3">
+          <div className="text-[11px] uppercase tracking-wide text-red-300/85">Hallucinations avoided</div>
+          <ul className="mt-1.5 space-y-1">
+            {diff.avoided.map((s, i) => (
+              <li key={i} className="flex items-start gap-2 text-[12.5px] text-white/85">
+                <span className="mt-1.5 inline-block h-1 w-1 flex-none rounded-full bg-red-400" />
+                <span>{s}</span>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
     </div>

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { findSubscriptionByToken, getCurrentUser, getPack, createSubscription, logQueryEvent } from '@/lib/insforge';
 import { search, type NiaSource } from '@/lib/nia/client';
-import { explainTrace } from '@/lib/codex/auditor';
+import { explainTrace, compareAnswers, type AnswerDiff } from '@/lib/codex/auditor';
 import { pushFeedEvent } from '@/lib/convex/server';
 import { env } from '@/lib/env';
 
@@ -79,18 +79,35 @@ export async function POST(req: Request) {
     actor: user.id === 'usr_demo' ? '@playground' : `@${user.id.slice(0, 8)}`,
   });
 
+  const answer = withPack.chunks[0]?.text ?? '';
+  const citations = withPack.chunks
+    .filter((c) => c.chunk_id !== 'answer' && c.citation.url)
+    .map((c) => c.citation.url);
+
   let baseline: string | null = null;
-  if (body.compare) baseline = await rawCodexAnswer(body.query);
+  let diff: AnswerDiff | null = null;
+  if (body.compare) {
+    baseline = await rawCodexAnswer(body.query);
+    // Run the diff in parallel-friendly fashion (we already have both answers
+    // by here). Best-effort — if Codex 5xx's, the UI just hides the panel.
+    if (baseline && answer) {
+      diff = await compareAnswers({
+        query: body.query,
+        baseline,
+        grounded: answer,
+        citations,
+      });
+    }
+  }
 
   const res = NextResponse.json({
     pack_id: body.pack_id,
     query: body.query,
-    answer: withPack.chunks[0]?.text ?? '',
-    citations: withPack.chunks
-      .filter((c) => c.chunk_id !== 'answer' && c.citation.url)
-      .map((c) => c.citation.url),
+    answer,
+    citations,
     why,
     baseline,
+    diff,
     latency_ms: withPack.latency_ms,
     chunks_used: withPack.chunks.length,
   });

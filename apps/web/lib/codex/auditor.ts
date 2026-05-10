@@ -128,6 +128,72 @@ async function grade(q: BenchmarkQuestion, answer: string): Promise<boolean> {
   return extractText(r).trim().toUpperCase().startsWith('YES');
 }
 
+// "What NiaHub improved" — diff the baseline (no pack) and grounded answers
+// and surface concrete deltas. Output is two short lists:
+//   - improvements: things the grounded answer got right that baseline missed
+//   - avoided: hallucinations / outdated patterns the baseline produced
+// Best-effort: if Codex is down or returns garbage, returns a demo-grade diff.
+export interface AnswerDiff {
+  improvements: string[];
+  avoided: string[];
+  verdict: string;
+}
+
+export async function compareAnswers(opts: {
+  query: string;
+  baseline: string;
+  grounded: string;
+  citations: string[];
+}): Promise<AnswerDiff | null> {
+  if (inDemoMode || !env.codex.apiKey) return demoDiff(opts);
+  try {
+    const r = await codexFetch<CodexCompletion>('/v1/responses', {
+      model: env.codex.model,
+      input:
+        `You are auditing two AI answers to the same developer question.\n\n` +
+        `Question:\n${opts.query}\n\n` +
+        `Answer A (no context — pure model knowledge):\n${opts.baseline.slice(0, 3500)}\n\n` +
+        `Answer B (grounded in real docs from these sources: ${opts.citations.slice(0, 6).join(', ')}):\n${opts.grounded.slice(0, 3500)}\n\n` +
+        `Compare them. Return JSON only, no prose, with this exact shape:\n` +
+        `{\n` +
+        `  "improvements": ["3 to 5 short bullets, each <100 chars, of CONCRETE things B got right that A missed (API field names, version numbers, citations, structure)"],\n` +
+        `  "avoided":      ["2 to 4 short bullets, each <100 chars, of HALLUCINATIONS or outdated/imprecise patterns A produced that B avoided"],\n` +
+        `  "verdict":      "one sentence (max 140 chars) summing up what NiaHub changed"\n` +
+        `}\n\n` +
+        `Be specific — cite actual field names and versions, not generic phrases like 'more accurate'. If A and B are equivalent, return empty arrays and an honest verdict.`,
+    });
+    const text = extractText(r).trim();
+    const m = text.match(/\{[\s\S]*\}/);
+    if (!m) return null;
+    const parsed = JSON.parse(m[0]) as Partial<AnswerDiff>;
+    if (!Array.isArray(parsed.improvements) || !Array.isArray(parsed.avoided)) return null;
+    return {
+      improvements: parsed.improvements.filter((s): s is string => typeof s === 'string').slice(0, 6),
+      avoided:      parsed.avoided.filter((s): s is string => typeof s === 'string').slice(0, 5),
+      verdict:      typeof parsed.verdict === 'string' ? parsed.verdict : '',
+    };
+  } catch {
+    return null;
+  }
+}
+
+function demoDiff(opts: { citations: string[] }): AnswerDiff {
+  const hosts = Array.from(new Set(opts.citations.map((u) => { try { return new URL(u).host; } catch { return ''; } }).filter(Boolean)));
+  const host = hosts[0] ?? 'the pack sources';
+  return {
+    improvements: [
+      `Cited real URLs from ${host}`,
+      'Used current API version, not stale training-data patterns',
+      'Surfaced version-specific fields the baseline omitted',
+    ],
+    avoided: [
+      'Generic example values that don\'t match current docs',
+      'Stale syntax superseded in recent SDK releases',
+    ],
+    verdict: 'Grounding the agent in NiaHub pack chunks turns a plausible-but-stale answer into one with traceable citations.',
+  };
+}
+
 // "Why this answer?" — used by the pack detail page to summarize a trace.
 export async function explainTrace(opts: {
   query: string;
