@@ -1,0 +1,48 @@
+{
+  "manifest_version": 3,
+  "name": "NiaHub for Aside",
+  "version": "0.1.0",
+  "description": "Detects when you're reading docs covered by a NiaHub pack and offers a one-click install for your editor.",
+  "action": {
+    "default_title": "NiaHub",
+    "default_popup": "popup.html"
+  },
+  "icons": {
+    "16": "icon.svg",
+    "48": "icon.svg",
+    "128": "icon.svg"
+  },
+  "permissions": ["activeTab", "storage", "clipboardWrite", "scripting"],
+  "host_permissions": [
+    "https://docs.stripe.com/*",
+    "https://stripe.com/docs/*",
+    "https://react.dev/*",
+    "https://nextjs.org/docs/*",
+    "https://www.postgresql.org/docs/*",
+    "https://docs.aws.amazon.com/AmazonS3/*",
+    "https://tailwindcss.com/docs/*",
+    "https://modelcontextprotocol.io/*",
+    "https://niahub.dev/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://docs.stripe.com/*",
+        "https://stripe.com/docs/*",
+        "https://react.dev/*",
+        "https://nextjs.org/docs/*",
+        "https://www.postgresql.org/docs/*",
+        "https://docs.aws.amazon.com/AmazonS3/*",
+        "https://tailwindcss.com/docs/*",
+        "https://modelcontextprotocol.io/*"
+      ],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  }
+}

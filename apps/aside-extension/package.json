@@ -1,0 +1,10 @@
+{
+  "name": "@niahub/aside-extension",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Aside companion. While you read docs, offer a one-click install of the matching NiaHub pack.",
+  "scripts": {
+    "build": "echo 'no build needed — load the unpacked extension from this folder'"
+  },
+  "license": "Apache-2.0"
+}

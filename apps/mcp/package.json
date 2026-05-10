@@ -1,0 +1,23 @@
+{
+  "name": "niahub-mcp",
+  "version": "0.1.0",
+  "description": "Thin stdio↔HTTPS forwarder. Drops a NiaHub pack into any MCP host (Cursor, Claude Code, Codex).",
+  "license": "Apache-2.0",
+  "type": "module",
+  "bin": {
+    "niahub-mcp": "dist/index.js"
+  },
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "^22.9.0",
+    "typescript": "^5.6.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

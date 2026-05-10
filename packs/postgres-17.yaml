@@ -1,0 +1,22 @@
+pack_id: postgres-17
+display_name: Postgres 17
+tagline: Postgres 17 docs + pgvector + pg_trgm.
+description: |
+  Postgres 17 reference plus the most-used extensions (pgvector for embeddings,
+  pg_trgm for fuzzy match). Window functions, EXPLAIN plans, partitioning —
+  answered against the version your prod is actually on.
+curator_org: NiaHub
+refresh_cadence: daily
+visibility: public
+accent_color: "#336791"
+tags: [postgres, database, sql, pgvector]
+sources:
+  - type: docs
+    url: https://www.postgresql.org/docs/17/
+  - type: github
+    url: https://github.com/pgvector/pgvector
+  - type: docs
+    url: https://www.postgresql.org/docs/17/pgtrgm.html
+benchmark_seed:
+  - "Write a HNSW index DDL for pgvector with cosine distance."
+  - "Use generated columns to maintain a tsvector for full-text search."

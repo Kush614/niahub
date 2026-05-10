@@ -1,0 +1,25 @@
+pack_id: mcp-protocol
+display_name: MCP Protocol
+tagline: Anthropic's MCP spec + SDK docs + reference servers.
+description: |
+  The Model Context Protocol — spec, TypeScript and Python SDKs, and the
+  reference server zoo. The pack you install when your agent is the thing
+  being built.
+curator_org: NiaHub
+refresh_cadence: webhook
+visibility: public
+accent_color: "#a855f7"
+tags: [mcp, agents, protocol, anthropic]
+sources:
+  - type: docs
+    url: https://modelcontextprotocol.io
+  - type: github
+    url: https://github.com/modelcontextprotocol/typescript-sdk
+  - type: github
+    url: https://github.com/modelcontextprotocol/servers
+webhook:
+  events: [push, release]
+  trigger_paths: ["docs/**", "src/**"]
+benchmark_seed:
+  - "Define a tool that streams progress notifications back to the host."
+  - "Expose a resource via the @modelcontextprotocol/sdk Server class."

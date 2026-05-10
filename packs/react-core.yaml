@@ -1,0 +1,23 @@
+pack_id: react-core
+display_name: React Core
+tagline: React docs + RFCs + GitHub issues on facebook/react.
+description: |
+  Everything you need to reason about modern React: react.dev docs, the RFC repo,
+  and curated issues from facebook/react. Server Components, Suspense, transitions —
+  answered with citations to canonical sources.
+curator_org: NiaHub
+refresh_cadence: daily
+visibility: public
+accent_color: "#61dafb"
+tags: [react, frontend, components]
+sources:
+  - type: docs
+    url: https://react.dev
+  - type: github
+    url: https://github.com/reactjs/rfcs
+  - type: github_issues
+    url: https://github.com/facebook/react
+    label_filters: ["Type: Bug", "Component: Server Components"]
+benchmark_seed:
+  - "Show the recommended pattern for streaming a React Server Component with a Suspense boundary."
+  - "When does React batch state updates outside of event handlers?"

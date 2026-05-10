@@ -1,0 +1,26 @@
+pack_id: stripe-api-current
+display_name: Stripe API (current)
+tagline: Stripe docs + node SDK + changelog, refreshed hourly.
+description: |
+  Pre-indexed Stripe knowledge: the current docs, the official Node SDK source,
+  and the Stripe changelog. Ask any agent to write Checkout, Billing, or Connect
+  code without hallucinating retired endpoints.
+curator_org: NiaHub
+refresh_cadence: hourly
+visibility: public
+accent_color: "#635bff"
+tags: [payments, billing, typescript, api]
+sources:
+  - type: docs
+    url: https://docs.stripe.com
+    refresh_strategy: full-crawl
+  - type: github
+    url: https://github.com/stripe/stripe-node
+    branch: master
+    paths: ["src/**/*.ts", "types/**/*.d.ts", "README.md"]
+  - type: changelog
+    url: https://stripe.com/docs/changelog
+benchmark_seed:
+  - "Create a Checkout Session for a subscription with a 14-day trial."
+  - "Verify a webhook signature using the latest Node SDK."
+  - "Use Setup Intents to save a card without charging it."

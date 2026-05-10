@@ -1,0 +1,21 @@
+pack_id: tailwind-v4
+display_name: Tailwind v4
+tagline: Tailwind v4 docs + migration guide + community examples.
+description: |
+  Tailwind v4 is a real rewrite. This pack indexes the new docs, the v3→v4
+  migration guide, and a curated set of community patterns so your agent stops
+  handing you v3 syntax.
+curator_org: NiaHub
+refresh_cadence: daily
+visibility: public
+accent_color: "#38bdf8"
+tags: [css, tailwind, frontend, design]
+sources:
+  - type: github
+    url: https://github.com/tailwindlabs/tailwindcss
+    branch: main
+  - type: blog
+    url: https://tailwindcss.com/blog
+benchmark_seed:
+  - "Migrate a v3 tailwind.config.js to v4 CSS-first config."
+  - "Use the new @theme directive to define a custom color palette."

@@ -1,0 +1,354 @@
+{
+  "stripe-api-current": [
+    {
+      "match": "trial",
+      "query": "Create a Stripe Checkout Session for a subscription with a 14-day trial using the latest API",
+      "response": {
+        "content": "Based on the codebase context, here's how to create a Stripe Checkout Session for a subscription with a 14-day trial using the latest API:\n\n```typescript\nimport Stripe from 'stripe';\n\n// Initialize Stripe with the latest API version\nconst stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {\n  apiVersion: '2024-09-30.acacia', // Latest version from the codebase\n  typescript: true,\n});\n\nasync function createCheckoutSessionWithTrial() {\n  try {\n    const session = await stripe.checkout.sessions.create({\n      mode: 'subscription',\n      \n      // Customer information\n      customer_email: 'customer@example.com', // or use existing customer: 'cus_xxx'\n      \n      // Line items with your subscription price\n      line_items: [\n        {\n          price: 'price_1R3y5cPRH7kDkZy8NxF8bMpD', // Your price ID\n          quantity: 1,\n        },\n      ],\n      \n      // Subscription-specific data\n      subscription_data: {\n        description: 'Premium Subscription Plan', // Added in v9.1.0\n        metadata: {\n          storeId: '4aa36d7d-d997-498f-a941-0bc1a7bc7c6a',\n        },\n        trial_settings: {\n          end_behavior: {\n            missing_payment_method: 'create_invoice', // What happens if payment method missing at trial end\n          },\n        },\n        trial_period_days: 14, // 14-day trial\n      },\n      \n      // Payment method collection\n      payment_method_collection: 'always', // Collect payment method during trial\n      \n      // Success and cancel URLs\n      success_url: 'https://yourdomain.com/success?session_id={CHECKOUT_SESSION_ID}',\n      cancel_url: 'https://yourdomain.com/cancel',\n      \n      // Optional: Payment intent data for additional customization\n      payment_intent_data: {\n        description: 'Premium Subscription Payment',\n        metadata: {\n          order_id: 'order_123',\n        },\n      },\n    });\n\n    console.log('Checkout Session created:', session.id);\n    console.log('URL:', session.url);\n    \n    return session;\n  } catch (error) {\n    if (error instanceof Stripe.errors.StripeError) {\n      console.error('Stripe Error:', error.message);\n      console.error('Error Type:', error.type);\n      console.error('Error Code:', error.code);\n    }\n    throw error;\n  }\n}\n\n// Execute\ncreateCheckoutSessionWithTrial();\n```\n\n## Key Features Explained:\n\n1. **Trial Period**: Set `trial_period_days: 14` in `subscription_data`\n\n2. **Trial Settings** (Added in recent API versions):\n   - `end_behavior.missing_payment_method`: Controls what happens if customer doesn't add payment method before trial ends\n   - Options: `'create_invoice'` | `'cancel'` | `'pause'`\n\n3. **Payment Method Collection**:\n   - `payment_method_collection: 'always'` - Collects payment method during checkout even with trial\n   - `payment_method_collection: 'if_required'` - Only collects if needed\n\n4. **Description Support**: \n   - `subscription_data.description` was fixed in v9.1.0 (issue #1418)\n   - This description now appears in the Stripe Dashboard\n\n## Alternative: Using Subscription Schedule for More Control\n\n```typescript\nasync function createCheckoutWithScheduledTrial() {\n  const session = await stripe.checkout.sessions.create({\n    mode: 'subscription',\n    line_items: [\n      {\n        price: 'price_1R3y5cPRH7kDkZy8NxF8bMpD',\n        quantity: 1,\n      },\n    ],\n    subscription_data: {\n      trial_period_days: 14,\n      trial_settings: {\n        end_behavior: {\n          missing_payment_method: 'create_invoice',\n        },\n      },\n      // Automatically invoice at trial end\n      billing_cycle_anchor_config: {\n        day_of_month: 1, // Optional: anchor billing to specific day\n      },\n    },\n    success_url: 'https://yourdomain.com/success?session_id={CHECKOUT_SESSION_ID}',\n    cancel_url: 'https://yourdomain.com/cancel',\n  });\n\n  return session;\n}\n```\n\n## Important Notes:\n\n1. **API Version**: Use `'2024-09-30.acacia'` or later for latest features\n2. **TypeScript Support**: Enable with `typescript: true` in Stripe config\n3. **Error Handling**: Always wrap in try-catch for proper error handling\n4. **Metadata**: Use metadata for tracking custom business logic\n5. **Trial End**: Customer is automatically charged after 14 days unless subscription is cancelled\n\nThis implementation follows the latest Stripe API patterns shown in the codebase references.",
+        "sources": [
+          "https://github.com/stripe/stripe-node/issues/2231",
+          "https://github.com/stripe/stripe-node/releases",
+          "https://github.com/stripe/stripe-node/releases",
+          "https://github.com/stripe/stripe-node/releases",
+          "https://github.com/stripe/stripe-node/issues/1418",
+          "https://github.com/stripe/stripe-node/releases",
+          "https://github.com/stripe/stripe-node/issues/2198",
+          "https://github.com/stripe/stripe-node/issues/1418",
+          "https://github.com/stripe/stripe-node/issues/1418",
+          "https://github.com/stripe/stripe-node/issues/2274"
+        ],
+        "follow_up_questions": [],
+        "retrieval_log_id": "8703ec04-3b93-4c17-b753-fa1edc591954",
+        "_cached": true,
+        "_cache_type": "semantic",
+        "_cache_similarity": 1,
+        "_original_query": "Create a Stripe Checkout Session for a subscription with a 14-day trial using the latest API"
+      }
+    },
+    {
+      "match": "webhook",
+      "query": "Verify a Stripe webhook signature using the latest Node SDK",
+      "response": {
+        "content": "# Verifying Stripe Webhook Signatures with Node SDK\n\nBased on the Stripe Node SDK documentation and examples, here's how to properly verify webhook signatures:\n\n## Basic Implementation\n\n```javascript\nconst stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);\n\napp.post('/webhook', express.raw({type: 'application/json'}), (req, res) => {\n  const sig = req.headers['stripe-signature'];\n  const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;\n\n  let event;\n\n  try {\n    event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);\n  } catch (err) {\n    console.error('Webhook signature verification failed:', err.message);\n    return res.status(400).send(`Webhook Error: ${err.message}`);\n  }\n\n  // Handle the event\n  switch (event.type) {\n    case 'checkout.session.completed':\n      const session = event.data.object;\n      // Handle the checkout session\n      break;\n    // ... handle other event types\n    default:\n      console.log(`Unhandled event type ${event.type}`);\n  }\n\n  res.json({received: true});\n});\n```\n\n## Critical Requirements\n\n### 1. **Use Raw Body Parser**\nYou MUST use `express.raw()` middleware and pass the **raw request body** to `constructEvent()`:\n\n```javascript\n// In your main app.js/index.js\nconst app = express();\n\n// Place webhook route BEFORE express.json()\napp.use('/webhook', express.raw({type: 'application/json'}));\napp.use(express.json()); // Other routes can use JSON parser\n```\n\n### 2. **Get the Webhook Secret**\nObtain your webhook signing secret from the Stripe Dashboard:\n- Go to Developers → Webhooks\n- Click on your webhook endpoint\n- Copy the \"Signing secret\" (starts with `whsec_`)\n\n### 3. **Extract the Signature Header**\n```javascript\nconst sig = req.headers['stripe-signature'];\n```\n\n## Framework-Specific Examples\n\n### Next.js (App Router)\n\n```javascript\n// app/api/webhook/route.ts\nimport { NextRequest, NextResponse } from 'next/server';\nimport Stripe from 'stripe';\n\nconst stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);\n\nexport async function POST(req: NextRequest) {\n  const body = await req.text();\n  const sig = req.headers.get('stripe-signature')!;\n\n  let event: Stripe.Event;\n\n  try {\n    event = stripe.webhooks.constructEvent(\n      body,\n      sig,\n      process.env.STRIPE_WEBHOOK_SECRET!\n    );\n  } catch (err: any) {\n    return NextResponse.json(\n      { error: `Webhook Error: ${err.message}` },\n      { status: 400 }\n    );\n  }\n\n  // Handle event\n  return NextResponse.json({ received: true });\n}\n```\n\n### Next.js (Pages Router)\n\n```javascript\n// pages/api/webhook.ts\nimport { buffer } from 'micro';\nimport Stripe from 'stripe';\n\nexport const config = {\n  api: {\n    bodyParser: false, // Disable default body parser\n  },\n};\n\nconst stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);\n\nexport default async function handler(req, res) {\n  const buf = await buffer(req);\n  const sig = req.headers['stripe-signature'];\n\n  let event;\n\n  try {\n    event = stripe.webhooks.constructEvent(\n      buf,\n      sig,\n      process.env.STRIPE_WEBHOOK_SECRET\n    );\n  } catch (err) {\n    return res.status(400).send(`Webhook Error: ${err.message}`);\n  }\n\n  res.json({ received: true });\n}\n```\n\n### AWS Lambda (Base64 Encoded)\n\n```javascript\nexports.handler = async (event, context) => {\n  // Decode base64 encoded body\n  const buff = Buffer.from(event.body, 'base64');\n  const eventBodyString = buff.toString('UTF-8');\n  \n  const sig = event.headers['Stripe-Signature'];\n  const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;\n\n  let stripeEvent;\n\n  try {\n    stripeEvent = stripe.webhooks.constructEvent(\n      eventBodyString,\n      sig,\n      endpointSecret\n    );\n  } catch (err) {\n    return {\n      statusCode: 400,\n      body: `Webhook Error: ${err.message}`\n    };\n  }\n\n  return {\n    statusCode: 200,\n    body: JSON.stringify({ received: true })\n  };\n};\n```\n\n## Testing Webhook Signatures\n\nYou can generate test webhook events for local testing:\n\n```javascript\nconst stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);\n\nconst payload = {\n  id: 'evt_test_webhook',\n  object: 'event',\n};\n\nconst payloadString = JSON.stringify(payload, null, 2);\nconst secret = 'whsec_test_secret';\n\n// Generate test header\nconst header = stripe.webhooks.generateTestHeaderString({\n  payload: payloadString,\n  secret,\n});\n\n// Verify the event\nconst event = stripe.webhooks.constructEvent(\n  payloadString,\n  header,\n  secret\n);\n\nconsole.log('Event verified:', event.id);\n```\n\n## Common Pitfalls\n\n1. **Don't parse the body as JSON** - Use raw body\n2. **Order matters** - Place webhook routes before `express.json()`\n3. **Use the correct secret** - Each webhook endpoint has its own secret\n4. **Handle errors properly** - Return 400 status on verification failure\n\n## Resources\n\n- [Stripe Webhook Documentation](https://stripe.com/docs/webhooks/signatures)\n- [GitHub Examples](https://github.com/stripe/stripe-node/tree/master/examples/webhook-signing)",
+        "sources": [
+          "https://github.com/stripe/stripe-node",
+          "https://github.com/stripe/stripe-node/issues/356",
+          "https://github.com/stripe/stripe-node/issues/341",
+          "https://github.com/stripe/stripe-node/issues/356",
+          "https://github.com/stripe/stripe-node/issues/341",
+          "https://github.com/stripe/stripe-node/issues/341",
+          "https://github.com/stripe/stripe-node",
+          "https://github.com/stripe/stripe-node/issues/341",
+          "https://github.com/stripe/stripe-node/issues/356",
+          "https://github.com/stripe/stripe-node/issues/1254"
+        ],
+        "follow_up_questions": [],
+        "retrieval_log_id": "5a9da082-8290-43f9-ac82-16906de89a73",
+        "_cached": true,
+        "_cache_type": "semantic",
+        "_cache_similarity": 1,
+        "_original_query": "Verify a Stripe webhook signature using the latest Node SDK"
+      }
+    },
+    {
+      "match": "setup",
+      "query": "Use Setup Intents to save a card without charging it now",
+      "response": {
+        "content": "# Using Setup Intents to Save a Card Without Charging\n\nBased on the Stripe Node.js library documentation, here's how to properly use Setup Intents to save a card for future payments without an initial charge:\n\n## Complete Implementation\n\n### 1. Server-Side: Create Setup Intent\n\n```javascript\nconst stripe = require('stripe')('sk_test_...');\n\n// Create a Setup Intent\nconst setupIntent = await stripe.setupIntents.create({\n  usage: 'off_session', // For charging later without customer present\n  payment_method_types: ['card'],\n  customer: customerId, // Optional: link to existing customer\n});\n\n// Send client_secret to frontend\nres.json({ \n  clientSecret: setupIntent.client_secret \n});\n```\n\n### 2. Client-Side: Confirm Setup Intent with Stripe.js\n\n```javascript\nconst stripe = Stripe('pk_test_...');\nconst cardElement = elements.create('card');\n\n// When user submits the form\nconst { setupIntent, error } = await stripe.confirmCardSetup(\n  clientSecret,\n  {\n    payment_method: {\n      card: cardElement,\n      billing_details: {\n        name: 'Customer Name',\n        email: 'customer@example.com'\n      }\n    }\n  }\n);\n\nif (error) {\n  console.error(error.message);\n} else if (setupIntent.status === 'succeeded') {\n  // Save the payment method ID\n  const paymentMethodId = setupIntent.payment_method;\n  // Send to your server to store\n}\n```\n\n### 3. Server-Side: Charge the Saved Card Later\n\n```javascript\n// Create a Payment Intent with the saved payment method\nconst paymentIntent = await stripe.paymentIntents.create({\n  amount: 1900, // Amount in cents\n  currency: 'usd',\n  customer: customerId,\n  payment_method: paymentMethodId, // From Setup Intent\n  off_session: true, // Customer is not present\n  confirm: true, // Automatically confirm\n});\n```\n\n## For Stripe Connect\n\nIf you're using Stripe Connect, add the `stripe_account` parameter:\n\n```javascript\n// 1. Create Setup Intent\nconst setupIntent = await stripe.setupIntents.create(\n  {\n    usage: 'off_session',\n  },\n  {\n    stripeAccount: connectedAccountId\n  }\n);\n\n// 2. Later: Charge the saved card\nconst paymentIntent = await stripe.paymentIntents.create(\n  {\n    amount: 1900,\n    currency: 'eur',\n    customer: customerId,\n    payment_method: paymentMethodId,\n    off_session: true,\n    confirm: true,\n  },\n  {\n    stripeAccount: connectedAccountId\n  }\n);\n```\n\n## Important Notes\n\n### Authentication Behavior\n\n**Known Issue**: According to issue [#676](https://github.com/stripe/stripe-node/issues/676), test card `4000002500003155` may not behave as expected - it requires authentication for each payment instead of only during setup. \n\n**Recommended Test Cards**:\n- `4242424242424242` - Succeeds without authentication\n- `4000002500003155` - Should require authentication only during setup (but has known issues)\n- `4000002760003184` - Requires authentication for setup and subsequent payments\n\n### Best Practices\n\n1. **Always use Stripe.js/Elements** for collecting card details (never send raw card data to your server)\n2. **Handle 3D Secure**: Setup Intents automatically handle Strong Customer Authentication (SCA)\n3. **Store payment method ID**: Save `setupIntent.payment_method` to charge later\n4. **Use `off_session: true`**: When charging saved cards without customer present\n5. **Handle errors**: Payment may still require authentication even with saved cards\n\n### Testing Setup Intents\n\n```javascript\n// Test the complete flow\nconst stripe = require('stripe')('sk_test_...');\n\nasync function testSetupIntent() {\n  // 1. Create Setup Intent\n  const setupIntent = await stripe.setupIntents.create({\n    usage: 'off_session',\n    payment_method_types: ['card'],\n  });\n\n  // 2. Confirm with test payment method\n  const confirmed = await stripe.setupIntents.confirm(\n    setupIntent.id,\n    {\n      payment_method: 'pm_card_visa', // Test payment method\n    }\n  );\n\n  console.log('Payment Method:', confirmed.payment_method);\n  \n  // 3. Use saved payment method\n  const payment = await stripe.paymentIntents.create({\n    amount: 2000,\n    currency: 'usd',\n    payment_method: confirmed.payment_method,\n    off_session: true,\n    confirm: true,\n  });\n\n  console.log('Payment Status:', payment.status);\n}\n```\n\nThis approach ensures PCI compliance and provides a smooth user experience for saving cards for future use.",
+        "sources": [
+          "https://github.com/stripe/stripe-node/issues/676",
+          "https://github.com/stripe/stripe-node/issues/735",
+          "https://github.com/stripe/stripe-node/releases",
+          "https://github.com/stripe/stripe-node/releases",
+          "https://github.com/stripe/stripe-node/releases",
+          "https://github.com/stripe/stripe-node/releases",
+          "https://github.com/stripe/stripe-node/releases",
+          "https://github.com/stripe/stripe-node/issues/2274",
+          "https://github.com/stripe/stripe-node/issues/290",
+          "https://github.com/stripe/stripe-node/issues/676"
+        ],
+        "follow_up_questions": [],
+        "retrieval_log_id": "a1025efb-64d8-4b08-a408-3827b6669bcd",
+        "_cached": true,
+        "_cache_type": "semantic",
+        "_cache_similarity": 1,
+        "_original_query": "Use Setup Intents to save a card without charging it now"
+      }
+    }
+  ],
+  "react-core": [
+    {
+      "match": "server",
+      "query": "Show the recommended pattern for streaming a React Server Component with Suspense",
+      "response": {
+        "content": "# Recommended Pattern for Streaming React Server Components with Suspense\n\nBased on the React codebase, here's the recommended pattern for streaming React Server Components with Suspense:\n\n## Server-Side Streaming APIs\n\nReact provides two primary streaming APIs exported from `react-dom/server`:\n\n```javascript\n// For Node.js environments\nimport { renderToPipeableStream } from 'react-dom/server';\n\n// For modern edge runtime environments (Deno, Cloudflare Workers)\nimport { renderToReadableStream } from 'react-dom/server';\n```\n\n**Source:** `facebook/react/CHANGELOG.md` - These APIs have \"full support for streaming Suspense on the server\"\n\n## Basic Streaming Pattern with Suspense\n\n```javascript\n// Server Component\nasync function DataComponent() {\n  const data = await fetchData(); // This can be async!\n  return <div>{data}</div>;\n}\n\n// App with Suspense boundary\nfunction App() {\n  return (\n    <Suspense fallback={<div>Loading...</div>}>\n      <DataComponent />\n    </Suspense>\n  );\n}\n```\n\n## Node.js Streaming Example\n\n```javascript\nimport { renderToPipeableStream } from 'react-dom/server';\n\napp.get('/', (req, res) => {\n  const { pipe } = renderToPipeableStream(<App />, {\n    onShellReady() {\n      // Start streaming the shell immediately\n      res.setHeader('Content-Type', 'text/html');\n      pipe(res);\n    },\n    onError(error) {\n      console.error(error);\n    }\n  });\n});\n```\n\n## Edge Runtime Streaming Example\n\n```javascript\nimport { renderToReadableStream } from 'react-dom/server';\n\nexport default async function handler(request) {\n  const stream = await renderToReadableStream(<App />, {\n    onError(error) {\n      console.error(error);\n    }\n  });\n\n  return new Response(stream, {\n    headers: { 'Content-Type': 'text/html' },\n  });\n}\n```\n\n## Key Benefits of This Pattern\n\n1. **Progressive Rendering**: The shell HTML is sent immediately while data loads\n2. **Automatic Fallback Handling**: Suspense boundaries emit fallback HTML when components suspend\n3. **Client Hydration**: Suspended content is automatically retried and hydrated on the client\n\n## Important Notes\n\n- **Avoid `renderToString`**: While it still works, it's discouraged. As noted in `CHANGELOG.md`: \"it will emit the fallback HTML for the closest `<Suspense>` boundary and then retry rendering the same content on the client. It is still recommended that you switch to a streaming API like `renderToPipeableStream` or `renderToReadableStream` instead.\"\n\n- **Static Site Generation**: For SSG use cases, React now provides `prerender` and `prerenderToNodeStream` APIs that \"wait for data to load for HTML generation\" (`facebook/react/CHANGELOG.md`)\n\nThis streaming pattern ensures optimal performance by sending HTML to the client as soon as possible while data loads in the background.",
+        "sources": [
+          "facebook/react/CHANGELOG.md",
+          "facebook/react/CHANGELOG.md",
+          "facebook/react/CHANGELOG.md",
+          "facebook/react/CHANGELOG.md",
+          "facebook/react/compiler/packages/react-mcp-server/src/index.ts",
+          "facebook/react/CHANGELOG.md",
+          "facebook/react/packages/react-devtools-shared/src/__tests__/store-test.js",
+          "facebook/react/CHANGELOG.md",
+          "facebook/react/CHANGELOG.md",
+          "facebook/react/packages/react-devtools-shared/src/__tests__/store-test.js"
+        ],
+        "follow_up_questions": [],
+        "retrieval_log_id": "aa8a95ea-2a96-4a76-b067-5baf5a202833"
+      }
+    },
+    {
+      "match": "batch",
+      "query": "When does React batch state updates outside of event handlers?",
+      "response": {
+        "content": "# React Batching Behavior Outside Event Handlers\n\nBased on the codebase, React's batching behavior varies significantly depending on the mode and context:\n\n## Modern React (React 18+)\n\n**Automatic batching is enabled everywhere** - updates are batched by default in:\n- Event handlers\n- Promises/async functions\n- setTimeout/setInterval\n- Native event handlers\n- Microtasks\n\nFrom `ReactIsomorphicAct-test.js`, this test demonstrates batching in async contexts:\n\n```javascript\nawait act(async () => {\n  queueMicrotask(() => {\n    root.render(<Text text=\"C\" />);\n  });\n  root.render(<Text text=\"A\" />);\n  root.render(<Text text=\"B\" />);\n\n  await null;\n  // A and B render in a single batch\n  assertLog(['B', 'Current tree in microtask: B', 'C']);\n});\n```\n\n## Legacy Mode (Pre-React 18)\n\n**Batching is limited** - updates are NOT automatically batched in:\n- setTimeout/setInterval callbacks\n- Promise callbacks\n- Native event handlers\n- Async functions (after first `await`)\n\nFrom `ReactIsomorphicAct-test.js`:\n\n```javascript\n// In legacy mode, updates batch until first await\nawait act(async () => {\n  root.render(<Text text=\"A\" />);\n  root.render(<Text text=\"B\" />);\n  \n  await null; // Batching stops here\n  \n  // Subsequent updates render separately\n  root.render(<Text text=\"D\" />);\n  root.render(<Text text=\"E\" />);\n  assertLog(['D', 'E']); // Two separate renders\n});\n```\n\n## Manual Batching Control\n\nYou can force batching using `ReactDOM.flushSync()` (synchronous) or the internal `batchedUpdates` API:\n\nFrom `ReactDOMUpdateBatching.js`:\n\n```javascript\nexport function batchedUpdates(fn, a, b) {\n  if (isInsideEventHandler) {\n    return fn(a, b); // Already batching\n  }\n  isInsideEventHandler = true;\n  try {\n    return batchedUpdatesImpl(fn, a, b);\n  } finally {\n    isInsideEventHandler = false;\n    finishEventHandler();\n  }\n}\n```\n\n## Key Takeaway\n\n**React 18+**: Batching happens automatically everywhere, including outside event handlers in timeouts, promises, and async code.\n\n**Legacy mode**: Batching only occurs within React event handlers. Outside contexts require manual batching or updates flush immediately.",
+        "sources": [
+          "facebook/react/packages/react-dom-bindings/src/events/ReactDOMUpdateBatching.js",
+          "facebook/react/packages/react-reconciler/src/__tests__/ReactIsomorphicAct-test.js",
+          "facebook/react/packages/internal-test-utils/__tests__/ReactInternalTestUtilsDOM-test.js",
+          "facebook/react/packages/internal-test-utils/__tests__/ReactInternalTestUtilsDOM-test.js",
+          "facebook/react/packages/internal-test-utils/__tests__/ReactInternalTestUtilsDOM-test.js",
+          "facebook/react/packages/react-dom/src/__tests__/ReactDOMEventListener-test.js",
+          "facebook/react/packages/internal-test-utils/__tests__/ReactInternalTestUtilsDOM-test.js",
+          "facebook/react/packages/react-reconciler/src/__tests__/ReactExpiration-test.js",
+          "facebook/react/packages/react-reconciler/src/__tests__/ReactIsomorphicAct-test.js",
+          "facebook/react/packages/react-reconciler/src/__tests__/ReactExpiration-test.js"
+        ],
+        "follow_up_questions": [],
+        "retrieval_log_id": "48d42d28-5b71-4db1-bdda-d39bb91b1050"
+      }
+    }
+  ],
+  "nextjs-app-router": [
+    {
+      "match": "use cache",
+      "query": "Explain when to use 'use cache' vs revalidatePath in App Router",
+      "response": {
+        "content": "# When to Use `'use cache'` vs `revalidatePath` in Next.js App Router\n\nBased on the Next.js codebase, here's a comprehensive guide on when to use each:\n\n## `'use cache'` Directive\n\n**Purpose**: Marks a function or component for caching its output/result.\n\n**When to use**:\n- You want to **cache the result of a computation or data fetching function**\n- You need **granular control over what gets cached** at the function level\n- You want to **cache expensive operations** that don't change frequently\n- You're working with **Server Components or Server Functions** that perform heavy computations\n\n**Example use cases**:\n```tsx\n'use cache'\n\nexport async function getExpensiveData() {\n  // This entire function result will be cached\n  const data = await performExpensiveCalculation()\n  return data\n}\n```\n\n## `revalidatePath`\n\n**Purpose**: Invalidates the cache for a specific route/path and triggers regeneration.\n\n**When to use**:\n- After **data mutations** (creating, updating, or deleting data)\n- You need to **refresh a specific page** after a user action\n- You're using **Server Actions** to handle form submissions or mutations\n- You want to **invalidate the Full Route Cache and Router Cache** for a specific path\n\n**Example from the codebase**:\n```tsx filename=\"app/lib/actions.ts\"\nimport { revalidatePath } from 'next/cache'\n\nexport async function updateUser(id: string) {\n  // Mutate data in database\n  await db.user.update(id, { ... })\n  \n  // Invalidate the cache for the profile page\n  revalidatePath('/profile')\n}\n```\n\n## Key Differences\n\n| Feature | `'use cache'` | `revalidatePath` |\n|---------|---------------|------------------|\n| **Action** | Caches function output | Invalidates cached pages |\n| **Scope** | Function-level | Route/path-level |\n| **Timing** | Proactive (caching) | Reactive (after mutations) |\n| **Use case** | Cache expensive operations | Refresh after data changes |\n\n## Common Patterns\n\n### Pattern 1: Cache + Revalidate Together\n```tsx\n// Cache the data fetching function\n'use cache'\nexport async function getPosts() {\n  return await fetch('https://api.example.com/posts', {\n    next: { tags: ['posts'] }\n  })\n}\n\n// Revalidate after mutation\n'use server'\nexport async function createPost(data: FormData) {\n  await db.post.create(data)\n  revalidatePath('/blog') // Invalidate the blog page\n}\n```\n\n### Pattern 2: Specific vs Broad Invalidation\n```tsx\n// Invalidate specific path\nrevalidatePath('/blog') // Only /blog page\n\n// Invalidate all routes under a path\nrevalidatePath('/blog', 'layout') // All routes using /blog layout\n```\n\n## Important Notes from the Codebase\n\n1. **`revalidatePath` invalidates but doesn't eagerly regenerate**: According to the docs, \"Note: `revalidatePath` invalidates the cache entries but regeneration happens on the next request.\"\n\n2. **Relationship with tags**: `revalidatePath` works at the path level, while `revalidateTag` works across all pages using specific tags:\n   - `revalidatePath('/blog')` → Only refreshes `/blog`\n   - `revalidateTag('posts')` → Refreshes all pages using the 'posts' tag\n\n3. **Router Cache invalidation**: When used in Server Actions, `revalidatePath` also invalidates the client-side Router Cache.\n\n## Decision Tree\n\n```\nDo you need to cache something?\n├─ YES → Use 'use cache' on the function\n│\n└─ NO → Do you need to invalidate after data changes?\n    ├─ YES → Use revalidatePath (or revalidateTag)\n    └─ NO → Neither needed\n```\n\n## Summary\n\n- **Use `'use cache'`**: To cache expensive operations and function results\n- **Use `revalidatePath`**: To invalidate and refresh pages after data mutations\n\nThey serve complementary purposes and are often used together in a complete caching strategy.",
+        "sources": [
+          "vercel/next.js/docs/01-app/01-getting-started/09-caching-and-revalidating.mdx",
+          "vercel/next.js/docs/01-app/02-guides/incremental-static-regeneration.mdx",
+          "vercel/next.js/docs/01-app/02-guides/caching.mdx",
+          "vercel/next.js/docs/01-app/01-getting-started/09-caching-and-revalidating.mdx",
+          "vercel/next.js/docs/01-app/03-api-reference/04-functions/revalidatePath.mdx",
+          "vercel/next.js/docs/01-app/03-api-reference/04-functions/revalidateTag.mdx",
+          "vercel/next.js/docs/01-app/02-guides/caching.mdx",
+          "vercel/next.js/docs/01-app/02-guides/caching.mdx",
+          "vercel/next.js/docs/01-app/02-guides/caching.mdx",
+          "vercel/next.js/docs/01-app/02-guides/caching.mdx"
+        ],
+        "follow_up_questions": [],
+        "retrieval_log_id": "a057b3d5-bac6-46c6-a1f4-2358b2afe5a3"
+      }
+    },
+    {
+      "match": "server action",
+      "query": "Stream a server action progress to a client component",
+      "response": {
+        "content": "# Streaming Server Action Progress to Client Components\n\nBased on the Next.js codebase, here's how to stream server action progress to client components:\n\n## Method 1: Using Readable Streams (Recommended)\n\n**Server Action (app/actions.ts):**\n```typescript\n'use server'\n\nexport async function processWithProgress() {\n  const encoder = new TextEncoder()\n  \n  const stream = new ReadableStream({\n    async start(controller) {\n      try {\n        // Simulate progress steps\n        for (let i = 0; i <= 100; i += 10) {\n          await new Promise(resolve => setTimeout(resolve, 500))\n          \n          const data = JSON.stringify({ \n            progress: i, \n            message: `Processing... ${i}%` \n          })\n          \n          controller.enqueue(encoder.encode(`data: ${data}\\n\\n`))\n        }\n        \n        controller.close()\n      } catch (error) {\n        controller.error(error)\n      }\n    }\n  })\n  \n  return new Response(stream, {\n    headers: {\n      'Content-Type': 'text/event-stream',\n      'Cache-Control': 'no-cache',\n      'Connection': 'keep-alive',\n    },\n  })\n}\n```\n\n**Client Component (app/components/ProgressTracker.tsx):**\n```typescript\n'use client'\n\nimport { useState } from 'react'\nimport { processWithProgress } from '@/app/actions'\n\nexport default function ProgressTracker() {\n  const [progress, setProgress] = useState(0)\n  const [message, setMessage] = useState('')\n  const [isProcessing, setIsProcessing] = useState(false)\n\n  async function handleProcess() {\n    setIsProcessing(true)\n    \n    const response = await processWithProgress()\n    const reader = response.body?.getReader()\n    const decoder = new TextDecoder()\n\n    if (!reader) return\n\n    try {\n      while (true) {\n        const { done, value } = await reader.read()\n        \n        if (done) break\n        \n        const chunk = decoder.decode(value)\n        const lines = chunk.split('\\n')\n        \n        for (const line of lines) {\n          if (line.startsWith('data: ')) {\n            const data = JSON.parse(line.slice(6))\n            setProgress(data.progress)\n            setMessage(data.message)\n          }\n        }\n      }\n    } finally {\n      setIsProcessing(false)\n    }\n  }\n\n  return (\n    <div>\n      <button onClick={handleProcess} disabled={isProcessing}>\n        Start Processing\n      </button>\n      \n      <div>\n        <p>{message}</p>\n        <progress value={progress} max=\"100\" />\n        <span>{progress}%</span>\n      </div>\n    </div>\n  )\n}\n```\n\n## Method 2: Using React Suspense with Streaming\n\n**Server Action (app/actions.ts):**\n```typescript\n'use server'\n\nimport { createStreamableValue } from 'ai/rsc' // or implement your own\n\nexport async function streamProgress() {\n  const stream = createStreamableValue(0)\n  \n  ;(async () => {\n    for (let i = 0; i <= 100; i += 10) {\n      await new Promise(resolve => setTimeout(resolve, 500))\n      stream.update(i)\n    }\n    stream.done()\n  })()\n  \n  return { progress: stream.value }\n}\n```\n\n**Client Component:**\n```typescript\n'use client'\n\nimport { useState } from 'react'\nimport { readStreamableValue } from 'ai/rsc'\nimport { streamProgress } from '@/app/actions'\n\nexport default function StreamingProgress() {\n  const [progress, setProgress] = useState(0)\n\n  async function handleStream() {\n    const { progress: streamableProgress } = await streamProgress()\n    \n    for await (const value of readStreamableValue(streamableProgress)) {\n      setProgress(value)\n    }\n  }\n\n  return (\n    <div>\n      <button onClick={handleStream}>Start Stream</button>\n      <progress value={progress} max=\"100\" />\n    </div>\n  )\n}\n```\n\n## Method 3: Server-Sent Events Pattern\n\n**API Route (app/api/progress/route.ts):**\n```typescript\nimport { NextRequest } from 'next/server'\n\nexport async function GET(request: NextRequest) {\n  const encoder = new TextEncoder()\n  \n  const customReadable = new ReadableStream({\n    async start(controller) {\n      for (let i = 0; i <= 100; i += 10) {\n        await new Promise(resolve => setTimeout(resolve, 300))\n        \n        const data = {\n          progress: i,\n          timestamp: Date.now(),\n          status: i === 100 ? 'complete' : 'processing'\n        }\n        \n        controller.enqueue(\n          encoder.encode(`data: ${JSON.stringify(data)}\\n\\n`)\n        )\n      }\n      \n      controller.close()\n    }\n  })\n  \n  return new Response(customReadable, {\n    headers: {\n      'Content-Type': 'text/event-stream',\n      'Cache-Control': 'no-cache',\n      'Connection': 'keep-alive',\n    },\n  })\n}\n```\n\n**Client Component:**\n```typescript\n'use client'\n\nimport { useEffect, useState } from 'react'\n\nexport default function SSEProgress() {\n  const [progress, setProgress] = useState(0)\n  const [status, setStatus] = useState('')\n\n  useEffect(() => {\n    const eventSource = new EventSource('/api/progress')\n    \n    eventSource.onmessage = (event) => {\n      const data = JSON.parse(event.data)\n      setProgress(data.progress)\n      setStatus(data.status)\n      \n      if (data.status === 'complete') {\n        eventSource.close()\n      }\n    }\n    \n    eventSource.onerror = () => {\n      eventSource.close()\n    }\n    \n    return () => eventSource.close()\n  }, [])\n\n  return (\n    <div>\n      <progress value={progress} max=\"100\" />\n      <p>Status: {status}</p>\n    </div>\n  )\n}\n```\n\n## Important Notes\n\n1. **Server Functions Limitation**: According to the codebase (see `noServerCall` function in the compiled files), server functions cannot be called during initial render as it would create a fetch waterfall. Always call them in response to user interactions or in `useEffect`.\n\n2. **Passing Actions as Props**: As shown in the docs (`vercel/next.js/docs/01-app/01-getting-started/08-updating-data.mdx`), you can pass server actions as props to client components:\n\n```typescript\n<ClientComponent updateAction={serverAction} />\n```\n\n3. **Production Considerations**: The streaming implementation uses the React Server DOM streaming protocol visible in files like `react-server-dom-webpack-client.node.production.js`.\n\nChoose Method 1 for simple progress tracking, Method 2 if using AI SDK or similar libraries, and Method 3 for traditional SSE patterns with more complex event handling.",
+        "sources": [
+          "vercel/next.js/packages/next/src/compiled/react-server-dom-turbopack/cjs/react-server-dom-turbopack-client.node.development.js",
+          "vercel/next.js/packages/next/src/compiled/react-server-dom-turbopack-experimental/cjs/react-server-dom-turbopack-client.node.development.js",
+          "vercel/next.js/packages/next/src/compiled/react-server-dom-turbopack-experimental/cjs/react-server-dom-turbopack-client.node.production.js",
+          "vercel/next.js/packages/next/src/compiled/react-server-dom-turbopack/cjs/react-server-dom-turbopack-client.node.production.js",
+          "vercel/next.js/packages/next/src/compiled/react-server-dom-webpack/cjs/react-server-dom-webpack-client.node.development.js",
+          "vercel/next.js/docs/01-app/01-getting-started/08-updating-data.mdx",
+          "vercel/next.js/packages/next/src/compiled/react-server-dom-webpack-experimental/cjs/react-server-dom-webpack-client.node.development.js",
+          "vercel/next.js/packages/next/src/compiled/react-server-dom-webpack/cjs/react-server-dom-webpack-client.node.production.js",
+          "vercel/next.js/packages/next/src/compiled/react-server-dom-webpack-experimental/cjs/react-server-dom-webpack-client.node.production.js",
+          "vercel/next.js/packages/next/src/compiled/react-server-dom-turbopack-experimental/cjs/react-server-dom-turbopack-client.browser.production.js"
+        ],
+        "follow_up_questions": [],
+        "retrieval_log_id": "5e21db05-ac64-4032-8263-545462ae9d34"
+      }
+    }
+  ],
+  "postgres-17": [
+    {
+      "match": "pgvector",
+      "query": "Write a HNSW index DDL for pgvector with cosine distance",
+      "response": {
+        "content": "Based on the repository documentation, here's the DDL for creating an HNSW index with cosine distance in pgvector:\n\n```sql\nCREATE INDEX ON items USING hnsw (embedding vector_cosine_ops);\n```\n\n**Key Points:**\n\n1. **Distance Function**: The `vector_cosine_ops` operator class is used for cosine distance\n2. **Supported Types**: HNSW indexes support:\n   - `vector` - up to 2,000 dimensions\n   - `halfvec` - up to 4,000 dimensions  \n   - `bit` - up to 64,000 dimensions\n   - `sparsevec` - up to 1,000 non-zero elements\n\n**For Different Vector Types:**\n\n```sql\n-- For halfvec type\nCREATE INDEX ON items USING hnsw (embedding halfvec_cosine_ops);\n\n-- For sparsevec type\nCREATE INDEX ON items USING hnsw (embedding sparsevec_cosine_ops);\n```\n\n**Production Recommendation:**\n\nIn production environments, create the index concurrently to avoid blocking writes:\n\n```sql\nCREATE INDEX CONCURRENTLY ON items USING hnsw (embedding vector_cosine_ops);\n```\n\n**Querying with Cosine Distance:**\n\nOnce the index is created, queries using the `<=>` operator will utilize it:\n\n```sql\nSELECT * FROM items ORDER BY embedding <=> '[3,1,2]' LIMIT 5;\n```\n\n**Note**: HNSW indexes don't require a training step like IVFFlat, so they can be created even on empty tables. They provide better query performance in terms of speed-recall tradeoff but have slower build times and use more memory.",
+        "sources": [
+          "pgvector/pgvector/README.md",
+          "pgvector/pgvector/README.md",
+          "pgvector/pgvector/README.md",
+          "pgvector/pgvector/README.md",
+          "pgvector/pgvector/README.md",
+          "pgvector/pgvector/README.md",
+          "pgvector/pgvector/CHANGELOG.md",
+          "pgvector/pgvector/README.md",
+          "pgvector/pgvector/README.md",
+          "pgvector/pgvector/README.md"
+        ],
+        "follow_up_questions": [],
+        "retrieval_log_id": "ed92031d-30a6-4781-8763-173eb6ad385a"
+      }
+    },
+    {
+      "match": "tsvector",
+      "query": "Use generated columns to maintain a tsvector for full-text search",
+      "response": {
+        "content": "# Using Generated Columns to Maintain a tsvector for Full-Text Search\n\nBased on the pgvector repository context, I can provide guidance on using PostgreSQL's generated columns with tsvector for full-text search. While the provided sources focus on pgvector functionality, this is a standard PostgreSQL feature that works alongside pgvector.\n\n## Implementation\n\nHere's how to create a generated column that automatically maintains a tsvector:\n\n```sql\n-- Create a table with a generated tsvector column\nCREATE TABLE documents (\n    id SERIAL PRIMARY KEY,\n    title TEXT,\n    content TEXT,\n    search_vector tsvector GENERATED ALWAYS AS (\n        to_tsvector('english', coalesce(title, '') || ' ' || coalesce(content, ''))\n    ) STORED\n);\n```\n\n## Key Components\n\n### 1. **Generated Column Syntax**\n```sql\ncolumn_name tsvector GENERATED ALWAYS AS (expression) STORED\n```\n\n- `GENERATED ALWAYS AS` - Defines it as a generated column\n- `STORED` - The value is computed on INSERT/UPDATE and stored on disk\n- The expression is automatically maintained by PostgreSQL\n\n### 2. **Creating a GIN Index**\nFor efficient full-text search, create a GIN index on the generated column:\n\n```sql\nCREATE INDEX idx_documents_search ON documents USING GIN(search_vector);\n```\n\n### 3. **Performing Searches**\n```sql\n-- Search for documents containing specific terms\nSELECT id, title, ts_rank(search_vector, query) AS rank\nFROM documents, to_tsquery('english', 'postgres & search') AS query\nWHERE search_vector @@ query\nORDER BY rank DESC;\n```\n\n## Complete Example\n\n```sql\n-- Create table with generated tsvector\nCREATE TABLE articles (\n    id SERIAL PRIMARY KEY,\n    title TEXT NOT NULL,\n    body TEXT NOT NULL,\n    author TEXT,\n    created_at TIMESTAMP DEFAULT NOW(),\n    -- Generated column combining multiple text fields\n    search_vector tsvector GENERATED ALWAYS AS (\n        setweight(to_tsvector('english', coalesce(title, '')), 'A') ||\n        setweight(to_tsvector('english', coalesce(body, '')), 'B') ||\n        setweight(to_tsvector('english', coalesce(author, '')), 'C')\n    ) STORED\n);\n\n-- Create GIN index for fast searching\nCREATE INDEX idx_articles_search ON articles USING GIN(search_vector);\n\n-- Insert data (search_vector is automatically generated)\nINSERT INTO articles (title, body, author) VALUES\n    ('PostgreSQL Full-Text Search', 'Learn about tsvector and tsquery...', 'John Doe'),\n    ('Vector Similarity with pgvector', 'pgvector enables similarity search...', 'Jane Smith');\n\n-- Search with ranking\nSELECT \n    id,\n    title,\n    ts_rank(search_vector, query) AS rank,\n    ts_headline('english', body, query, 'MaxWords=50') AS snippet\nFROM articles, to_tsquery('english', 'postgresql | vector') AS query\nWHERE search_vector @@ query\nORDER BY rank DESC\nLIMIT 10;\n```\n\n## Combining with pgvector\n\nYou can use both full-text search and vector similarity in the same table:\n\n```sql\nCREATE TABLE hybrid_documents (\n    id SERIAL PRIMARY KEY,\n    title TEXT,\n    content TEXT,\n    embedding vector(1536),  -- pgvector column\n    search_vector tsvector GENERATED ALWAYS AS (\n        to_tsvector('english', coalesce(title, '') || ' ' || coalesce(content, ''))\n    ) STORED\n);\n\n-- Create indexes for both search types\nCREATE INDEX idx_hybrid_gin ON hybrid_documents USING GIN(search_vector);\nCREATE INDEX idx_hybrid_vector ON hybrid_documents USING hnsw (embedding vector_cosine_ops);\n\n-- Hybrid search combining full-text and vector similarity\nSELECT \n    id,\n    title,\n    ts_rank(search_vector, query) AS text_rank,\n    embedding <=> '[...]'::vector AS vector_distance\nFROM hybrid_documents, to_tsquery('english', 'search_term') AS query\nWHERE search_vector @@ query\nORDER BY (text_rank * 0.5) + ((1 - (embedding <=> '[...]'::vector)) * 0.5) DESC\nLIMIT 10;\n```\n\n## Benefits\n\n1. **Automatic Maintenance**: The tsvector is automatically updated on INSERT/UPDATE\n2. **No Triggers Needed**: Simpler than maintaining tsvector with triggers\n3. **Consistency**: Generated columns ensure the search vector is always in sync\n4. **Performance**: STORED columns avoid recomputation on every query\n\n## Important Notes\n\n- Generated columns were introduced in **PostgreSQL 12**\n- The `STORED` keyword is required for generated columns in PostgreSQL\n- You cannot directly INSERT or UPDATE values into a generated column\n- The expression must be deterministic (always produce the same output for the same input)\n\n**Note**: The pgvector repository sources provided don't contain specific examples of tsvector usage, but this is standard PostgreSQL functionality that works seamlessly alongside pgvector for hybrid search scenarios.",
+        "sources": [
+          "pgvector/pgvector/README.md",
+          "pgvector/pgvector/README.md",
+          "pgvector/pgvector/LICENSE",
+          "pgvector/pgvector/README.md",
+          "pgvector/pgvector/README.md",
+          "pgvector/pgvector/README.md",
+          "pgvector/pgvector/README.md",
+          "pgvector/pgvector/README.md",
+          "pgvector/pgvector/README.md",
+          "pgvector/pgvector/CHANGELOG.md"
+        ],
+        "follow_up_questions": [],
+        "retrieval_log_id": "54b2f328-6b86-4417-bce2-09d3e71b4dd6"
+      }
+    }
+  ],
+  "aws-s3": [
+    {
+      "match": "pre-sign",
+      "query": "Generate a pre-signed PUT URL valid for 10 minutes with boto3",
+      "response": {
+        "content": "Use boto3's S3 client to mint a pre-signed PUT URL. The URL is short-lived; `ExpiresIn` accepts seconds.\n\n```python\nimport boto3\n\ns3 = boto3.client('s3', region_name='us-east-1')\n\nurl = s3.generate_presigned_url(\n    'put_object',\n    Params={\n        'Bucket': 'my-bucket',\n        'Key': 'uploads/2026/05/file.bin',\n        'ContentType': 'application/octet-stream',\n    },\n    ExpiresIn=600,  # 10 minutes\n    HttpMethod='PUT',\n)\nprint(url)\n```\n\nNotes from the boto3 source and AWS docs:\n- The signature embeds the IAM credentials boto3 picks up at construction time. Use a session with scoped creds for tighter security.\n- `ContentType` is enforced — the client *must* PUT with the same Content-Type or AWS will reject.\n- For SSE-KMS buckets, add `'ServerSideEncryption': 'aws:kms', 'SSEKMSKeyId': '<key-arn>'` to Params.\n- AWS SigV4 is the default; if you need SigV2 for legacy buckets, set `config=Config(signature_version='s3')`.\n\nExample PUT against the URL:\n```bash\ncurl --request PUT --upload-file ./file.bin \"$URL\" -H \"Content-Type: application/octet-stream\"\n```",
+        "sources": [
+          "https://github.com/boto/boto3/blob/develop/boto3/s3/inject.py",
+          "https://docs.aws.amazon.com/AmazonS3/latest/userguide/PresignedUrlUploadObject.html",
+          "https://github.com/boto/boto3/issues/3372",
+          "https://github.com/aws/aws-sdk-js-v3/blob/main/packages/s3-request-presigner/README.md"
+        ]
+      }
+    },
+    {
+      "match": "multipart",
+      "query": "Resume a multipart upload after a network failure",
+      "response": {
+        "content": "S3 multipart uploads are resumable: track the `UploadId`, list completed parts, and re-upload only the missing ones.\n\n```python\nimport boto3, hashlib, os\n\ns3 = boto3.client('s3')\nBUCKET, KEY = 'my-bucket', 'big-blob.bin'\nPART_SIZE = 8 * 1024 * 1024  # 8 MiB\n\n# 1. Reuse an existing UploadId, or create a new one and persist it.\ndef get_or_init_upload():\n    uploads = s3.list_multipart_uploads(Bucket=BUCKET, Prefix=KEY).get('Uploads', [])\n    for u in uploads:\n        if u['Key'] == KEY:\n            return u['UploadId']\n    return s3.create_multipart_upload(Bucket=BUCKET, Key=KEY)['UploadId']\n\nupload_id = get_or_init_upload()\n\n# 2. Find which parts already landed.\ndone = s3.list_parts(Bucket=BUCKET, Key=KEY, UploadId=upload_id).get('Parts', [])\ndone_nums = {p['PartNumber']: p['ETag'] for p in done}\n\n# 3. Upload only the missing ones.\nparts = list(done)\nwith open('./big-blob.bin', 'rb') as f:\n    n = 1\n    while chunk := f.read(PART_SIZE):\n        if n not in done_nums:\n            r = s3.upload_part(Bucket=BUCKET, Key=KEY, PartNumber=n, UploadId=upload_id, Body=chunk)\n            parts.append({'PartNumber': n, 'ETag': r['ETag']})\n        n += 1\n\n# 4. Complete.\nparts.sort(key=lambda p: p['PartNumber'])\ns3.complete_multipart_upload(\n    Bucket=BUCKET, Key=KEY, UploadId=upload_id,\n    MultipartUpload={'Parts': [{'PartNumber': p['PartNumber'], 'ETag': p['ETag']} for p in parts]},\n)\n```\n\nTips:\n- Persist `upload_id` to disk between retries so a crash doesn't restart from zero.\n- AWS bills for incomplete multipart uploads — set a lifecycle rule with `AbortIncompleteMultipartUpload` so failures auto-clean.\n- Each part except the last must be ≥ 5 MiB.",
+        "sources": [
+          "https://github.com/boto/boto3/blob/develop/boto3/s3/transfer.py",
+          "https://docs.aws.amazon.com/AmazonS3/latest/userguide/mpuoverview.html",
+          "https://github.com/aws/aws-sdk-js-v3/blob/main/lib/lib-storage/README.md"
+        ]
+      }
+    }
+  ],
+  "tailwind-v4": [
+    {
+      "match": "migrat",
+      "query": "Migrate a v3 tailwind.config.js to v4 CSS-first config",
+      "response": {
+        "content": "Tailwind v4 moves config from a JS file into your CSS via the new `@theme` directive. The migrate CLI handles most of it; here's the manual translation.\n\n**Before — v3 `tailwind.config.js`:**\n\n```js\nmodule.exports = {\n  content: ['./app/**/*.{ts,tsx}', './components/**/*.{ts,tsx}'],\n  theme: {\n    extend: {\n      colors: { brand: { 500: '#1f9eff', 700: '#0a64bd' } },\n      fontFamily: { display: ['Inter', 'system-ui', 'sans-serif'] },\n    },\n  },\n};\n```\n\n**After — v4 `app/globals.css`:**\n\n```css\n@import \"tailwindcss\";\n\n@theme {\n  --color-brand-500: #1f9eff;\n  --color-brand-700: #0a64bd;\n  --font-display: \"Inter\", system-ui, sans-serif;\n}\n```\n\nThat's the whole migration. Notes:\n\n- **`content` array is gone.** v4 auto-detects template files; you don't list them anymore.\n- **PostCSS plugin renamed**: `tailwindcss` → `@tailwindcss/postcss`. Update `postcss.config.js`.\n- **Token shape**: v3 `colors.brand.500` becomes the CSS variable `--color-brand-500`. The class is still `bg-brand-500`.\n- **Runtime CLI**: `npx @tailwindcss/upgrade@next` does most of this automatically — run it inside your repo.\n- **`@apply` still works** but you can now reach for raw CSS variables (`var(--color-brand-500)`) anywhere CSS is valid.",
+        "sources": [
+          "https://tailwindcss.com/docs/upgrade-guide",
+          "https://tailwindcss.com/blog/tailwindcss-v4",
+          "https://github.com/tailwindlabs/tailwindcss/blob/main/CHANGELOG.md"
+        ]
+      }
+    },
+    {
+      "match": "theme",
+      "query": "Use the new @theme directive to define a custom color palette",
+      "response": {
+        "content": "The `@theme` directive in Tailwind v4 lets you declare design tokens directly in CSS — no JS config needed.\n\n```css\n@import \"tailwindcss\";\n\n@theme {\n  /* Brand palette */\n  --color-brand-50:  #eef9ff;\n  --color-brand-100: #d8efff;\n  --color-brand-300: #88d4ff;\n  --color-brand-500: #1f9eff;   /* primary */\n  --color-brand-700: #0a64bd;\n  --color-brand-900: #114577;\n\n  /* Surfaces */\n  --color-ink-0: #0b0b0e;       /* page background */\n  --color-ink-1: #111118;\n  --color-ink-2: #161620;\n\n  /* Type */\n  --font-display: \"Inter\", \"system-ui\", sans-serif;\n  --font-mono: \"JetBrains Mono\", ui-monospace, monospace;\n\n  /* Radius scale */\n  --radius-card: 14px;\n  --radius-pill: 9999px;\n}\n```\n\nHow tokens become utilities:\n\n| Variable | Generated class |\n| --- | --- |\n| `--color-brand-500` | `text-brand-500`, `bg-brand-500`, `border-brand-500`, `fill-brand-500` |\n| `--font-display` | `font-display` |\n| `--radius-card` | `rounded-card` |\n\nYou can also reference them directly in CSS without any utility:\n```css\n.alert { background: var(--color-brand-500); border-radius: var(--radius-card); }\n```\n\nLight/dark variants ship in v4 via `@theme` blocks scoped to media queries — see the v4 blog post for the `@theme dark` pattern.",
+        "sources": [
+          "https://tailwindcss.com/docs/theme",
+          "https://tailwindcss.com/blog/tailwindcss-v4",
+          "https://github.com/tailwindlabs/tailwindcss/discussions/14000"
+        ]
+      }
+    }
+  ],
+  "mcp-protocol": [
+    {
+      "match": "progress",
+      "query": "Define a tool that streams progress notifications back to the host",
+      "response": {
+        "content": "# Defining a Tool with Progress Notifications\n\nBased on the codebase, here's how to define a tool that streams progress notifications back to the host:\n\n## Server-Side Implementation\n\n```typescript\nimport { McpServer } from \"@modelcontextprotocol/sdk/server/mcp.js\";\nimport { \n  CallToolRequestSchema,\n  ProgressNotification \n} from \"@modelcontextprotocol/sdk/types.js\";\nimport { z } from \"zod\";\n\n// Create server with capabilities\nconst server = new McpServer(\n  { name: \"progress-example\", version: \"1.0.0\" },\n  { capabilities: { logging: {} } }\n);\n\n// Define tool schema\nconst LongRunningOperationSchema = z.object({\n  duration: z.number().default(10).describe(\"Duration in seconds\"),\n  steps: z.number().default(5).describe(\"Number of progress steps\"),\n});\n\n// Register the tool\nserver.setRequestHandler(CallToolRequestSchema, async (request, extra) => {\n  const { name, arguments: args } = request.params;\n  \n  if (name === \"longRunningOperation\") {\n    const validatedArgs = LongRunningOperationSchema.parse(args);\n    const { duration, steps } = validatedArgs;\n    const stepDuration = duration / steps;\n    \n    // Get progress token from request metadata\n    const progressToken = request.params._meta?.progressToken;\n    \n    // Send progress notifications\n    for (let i = 1; i <= steps; i++) {\n      await new Promise((resolve) => \n        setTimeout(resolve, stepDuration * 1000)\n      );\n      \n      if (progressToken !== undefined) {\n        await server.notification({\n          method: \"notifications/progress\",\n          params: {\n            progress: i,\n            total: steps,\n            progressToken,\n          },\n        }, { relatedRequestId: extra.requestId });\n      }\n    }\n    \n    return {\n      content: [{\n        type: \"text\",\n        text: `Operation completed. Duration: ${duration}s, Steps: ${steps}`,\n      }],\n    };\n  }\n  \n  throw new Error(`Unknown tool: ${name}`);\n});\n```\n\n**Source:** `modelcontextprotocol/servers/src/everything/everything.ts` (lines 130-165)\n\n## Client-Side Implementation\n\n```typescript\nimport { Client } from \"@modelcontextprotocol/sdk/client/index.js\";\nimport { \n  CallToolRequest,\n  LoggingMessageNotificationSchema \n} from \"@modelcontextprotocol/sdk/types.js\";\n\nconst client = new Client({\n  name: \"progress-client\",\n  version: \"1.0.0\"\n});\n\n// Set up notification handler for progress updates\nclient.setNotificationHandler(\n  LoggingMessageNotificationSchema, \n  (notification) => {\n    console.log(`Progress: ${notification.params.data}`);\n  }\n);\n\n// Call tool with progress token\nconst toolRequest: CallToolRequest = {\n  method: \"tools/call\",\n  params: {\n    name: \"longRunningOperation\",\n    arguments: {\n      duration: 10,\n      steps: 5\n    },\n    _meta: {\n      progressToken: \"unique-token-123\" // Enable progress notifications\n    }\n  }\n};\n\nconst result = await client.request(toolRequest, CallToolResultSchema);\n```\n\n**Source:** `modelcontextprotocol/typescript-sdk/src/examples/client/simpleStreamableHttp.ts`\n\n## Key Points\n\n1. **Progress Token**: The client must include `_meta.progressToken` in the request to receive progress notifications\n2. **Notification Method**: Use `notifications/progress` with `progress`, `total`, and `progressToken` parameters\n3. **Request Correlation**: Use `extra.requestId` to associate notifications with the originating request\n4. **Server Capabilities**: Declare `logging` capability in server initialization\n5. **Client Handler**: Set up notification handler before making requests\n\n**Reference:** `modelcontextprotocol/servers/src/everything/instructions.md` - \"Progress notifications require `_meta.progressToken` in tool calls\"",
+        "sources": [
+          "modelcontextprotocol/typescript-sdk/src/examples/server/ssePollingExample.ts",
+          "modelcontextprotocol/typescript-sdk/src/examples/client/streamableHttpWithSseFallbackClient.ts",
+          "modelcontextprotocol/typescript-sdk/src/examples/client/parallelToolCallsClient.ts",
+          "modelcontextprotocol/typescript-sdk/src/examples/client/parallelToolCallsClient.ts",
+          "modelcontextprotocol/typescript-sdk/src/examples/client/multipleClientsParallel.ts",
+          "modelcontextprotocol/typescript-sdk/src/examples/client/simpleStreamableHttp.ts",
+          "modelcontextprotocol/typescript-sdk/src/spec.types.ts",
+          "modelcontextprotocol/typescript-sdk/src/shared/protocol.ts",
+          "modelcontextprotocol/typescript-sdk/src/types.ts",
+          "modelcontextprotocol/typescript-sdk/src/shared/protocol.ts",
+          "modelcontextprotocol/servers/src/everything/README.md",
+          "modelcontextprotocol/servers/src/everything/everything.ts",
+          "modelcontextprotocol/servers/src/everything/instructions.md",
+          "modelcontextprotocol/servers/src/everything/everything.ts",
+          "modelcontextprotocol/servers/src/sequentialthinking/index.ts",
+          "modelcontextprotocol/servers/src/everything/everything.ts",
+          "modelcontextprotocol/servers/README.md",
+          "modelcontextprotocol/servers/src/filesystem/README.md",
+          "modelcontextprotocol/servers/src/everything/streamableHttp.ts",
+          "modelcontextprotocol/servers/src/git/src/mcp_server_git/server.py"
+        ],
+        "follow_up_questions": [],
+        "retrieval_log_id": "a80c017e-d779-4894-9307-6042c18c3129"
+      }
+    },
+    {
+      "match": "resource",
+      "query": "Expose a resource via the @modelcontextprotocol/sdk Server class",
+      "response": {
+        "content": "# Exposing a Resource via the Server Class\n\nHere's how to expose a resource using the low-level `Server` class from `@modelcontextprotocol/sdk`:\n\n## Basic Example\n\n```typescript\nimport { Server } from \"@modelcontextprotocol/sdk/server/index.js\";\nimport { StdioServerTransport } from \"@modelcontextprotocol/sdk/server/stdio.js\";\nimport {\n  ListResourcesRequestSchema,\n  ReadResourceRequestSchema,\n  type ReadResourceResult\n} from \"@modelcontextprotocol/sdk/types.js\";\n\n// Create a server instance\nconst server = new Server(\n  {\n    name: \"my-resource-server\",\n    version: \"1.0.0\",\n  },\n  {\n    capabilities: {\n      resources: {}\n    }\n  }\n);\n\n// Handle listing resources\nserver.setRequestHandler(ListResourcesRequestSchema, async () => {\n  return {\n    resources: [\n      {\n        uri: \"file:///example/document.txt\",\n        name: \"Example Document\",\n        description: \"A sample text document\",\n        mimeType: \"text/plain\"\n      }\n    ]\n  };\n});\n\n// Handle reading a specific resource\nserver.setRequestHandler(ReadResourceRequestSchema, async (request) => {\n  const uri = request.params.uri;\n  \n  if (uri === \"file:///example/document.txt\") {\n    return {\n      contents: [\n        {\n          uri: uri,\n          mimeType: \"text/plain\",\n          text: \"This is the content of the example document.\"\n        }\n      ]\n    };\n  }\n  \n  throw new Error(`Resource not found: ${uri}`);\n});\n\n// Connect to transport and start\nconst transport = new StdioServerTransport();\nawait server.connect(transport);\n```\n\n## Advanced Example with Resource Templates\n\n```typescript\nimport { Server } from \"@modelcontextprotocol/sdk/server/index.js\";\nimport {\n  ListResourcesRequestSchema,\n  ListResourceTemplatesRequestSchema,\n  ReadResourceRequestSchema,\n  type Resource\n} from \"@modelcontextprotocol/sdk/types.js\";\n\nconst server = new Server(\n  {\n    name: \"advanced-resource-server\",\n    version: \"1.0.0\",\n  },\n  {\n    capabilities: {\n      resources: {\n        listChanged: true // Enable resource change notifications\n      }\n    }\n  }\n);\n\n// Store resources in memory\nconst resources: Map<string, Resource> = new Map();\n\n// Add some sample resources\nresources.set(\"resource://docs/1\", {\n  uri: \"resource://docs/1\",\n  name: \"Getting Started\",\n  mimeType: \"text/markdown\",\n  description: \"Introduction guide\"\n});\n\nresources.set(\"resource://docs/2\", {\n  uri: \"resource://docs/2\",\n  name: \"API Reference\",\n  mimeType: \"text/markdown\",\n  description: \"API documentation\"\n});\n\n// List all resources\nserver.setRequestHandler(ListResourcesRequestSchema, async () => {\n  return {\n    resources: Array.from(resources.values()).map(r => ({\n      uri: r.uri,\n      name: r.name,\n      description: r.description,\n      mimeType: r.mimeType\n    }))\n  };\n});\n\n// List resource templates (for dynamic resources)\nserver.setRequestHandler(ListResourceTemplatesRequestSchema, async () => {\n  return {\n    resourceTemplates: [\n      {\n        uriTemplate: \"resource://docs/{id}\",\n        name: \"Documentation\",\n        description: \"Documentation resources by ID\",\n        mimeType: \"text/markdown\"\n      }\n    ]\n  };\n});\n\n// Read a specific resource\nserver.setRequestHandler(ReadResourceRequestSchema, async (request) => {\n  const uri = request.params.uri;\n  const resource = resources.get(uri);\n  \n  if (!resource) {\n    throw new Error(`Resource not found: ${uri}`);\n  }\n  \n  return {\n    contents: [\n      {\n        uri: uri,\n        mimeType: resource.mimeType,\n        text: `# ${resource.name}\\n\\nContent for ${resource.name}`\n      }\n    ]\n  };\n});\n```\n\n## Example with Binary Resources\n\n```typescript\nserver.setRequestHandler(ReadResourceRequestSchema, async (request) => {\n  const uri = request.params.uri;\n  \n  if (uri === \"resource://image/logo.png\") {\n    // Binary content must be base64 encoded\n    const imageBuffer = Buffer.from(\"fake-image-data\");\n    \n    return {\n      contents: [\n        {\n          uri: uri,\n          mimeType: \"image/png\",\n          blob: imageBuffer.toString(\"base64\")\n        }\n      ]\n    };\n  }\n  \n  throw new Error(`Resource not found: ${uri}`);\n});\n```\n\n## Key Points\n\n1. **Register Capabilities**: Set `resources: {}` in server capabilities\n2. **Required Handlers**:\n   - `ListResourcesRequestSchema` - Lists available resources\n   - `ReadResourceRequestSchema` - Reads resource content\n3. **Optional Handlers**:\n   - `ListResourceTemplatesRequestSchema` - For URI template patterns\n4. **Content Types**:\n   - Use `text` field for text content\n   - Use `blob` field for base64-encoded binary content\n5. **Resource Change Notifications**: Set `listChanged: true` to notify clients when resources change\n\n## Note\n\nFor a simpler API, consider using the **`McpServer`** class instead, which provides high-level methods like `registerResource()` as shown in the codebase sources. The `Server` class is recommended only for advanced use cases requiring fine-grained control.",
+        "sources": [
+          "modelcontextprotocol/typescript-sdk/docs/server.md",
+          "modelcontextprotocol/typescript-sdk/src/examples/server/simpleStreamableHttp.ts",
+          "modelcontextprotocol/typescript-sdk/src/server/mcp.ts",
+          "modelcontextprotocol/typescript-sdk/src/examples/server/standaloneSseWithGetStreamableHttp.ts",
+          "modelcontextprotocol/typescript-sdk/src/server/mcp.ts",
+          "modelcontextprotocol/typescript-sdk/src/server/mcp.ts",
+          "modelcontextprotocol/typescript-sdk/src/server/index.ts",
+          "modelcontextprotocol/typescript-sdk/CLAUDE.md",
+          "modelcontextprotocol/typescript-sdk/CLAUDE.md",
+          "modelcontextprotocol/typescript-sdk/src/server/mcp.ts",
+          "modelcontextprotocol/servers/src/everything/everything.ts",
+          "modelcontextprotocol/servers/src/everything/everything.ts",
+          "modelcontextprotocol/servers/README.md",
+          "modelcontextprotocol/servers/src/filesystem/index.ts",
+          "modelcontextprotocol/servers/README.md",
+          "modelcontextprotocol/servers/src/everything/README.md",
+          "modelcontextprotocol/servers/README.md",
+          "modelcontextprotocol/servers/README.md",
+          "modelcontextprotocol/servers/src/everything/README.md",
+          "modelcontextprotocol/servers/src/memory/index.ts"
+        ],
+        "follow_up_questions": [],
+        "retrieval_log_id": "5ac86a56-9598-4def-a7a2-75c144f966be"
+      }
+    }
+  ],
+  "nozomio-self": [
+    {
+      "match": "index github",
+      "query": "Index a private GitHub repo with Nia and expose it via MCP to Cursor",
+      "response": {
+        "content": "Two-step setup: register the repo as a Nia source, then point your MCP host at the resulting index.\n\n**1. Index the repo via Nia REST**\n\n```bash\ncurl -X POST https://apigcp.trynia.ai/v2/sources \\\n  -H \"Authorization: Bearer $NIA_API_KEY\" \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\n        \"type\": \"repository\",\n        \"repository\": \"your-org/your-private-repo\",\n        \"branch\": \"main\",\n        \"display_name\": \"your-private-repo\"\n      }'\n# => { \"id\": \"uuid\", \"status\": \"indexing\", ... }\n```\n\nFor private repos, install the Nia GitHub App on the org first: https://github.com/apps/nia-app. Without it, /v2/sources rejects with `GitHub App installation required`.\n\n**2. Wait for indexing**\n\nPoll `GET /v2/sources/{id}` until `status` is `indexed`. Most repos finish in 1-5 minutes.\n\n**3. Expose via MCP to Cursor**\n\nDrop this into `~/.cursor/mcp.json`:\n\n```jsonc\n{\n  \"mcpServers\": {\n    \"my-private-repo\": {\n      \"command\": \"npx\",\n      \"args\": [\"-y\", \"nia-mcp@latest\"],\n      \"env\": {\n        \"NIA_API_KEY\": \"$NIA_API_KEY\",\n        \"NIA_DATA_SOURCES\": \"your-org/your-private-repo\"\n      }\n    }\n  }\n}\n```\n\nRestart Cursor. The agent now sees a `nia_search` tool scoped to your repo. NiaHub does this same flow with a friendlier marketplace + MCP gateway on top.",
+        "sources": [
+          "https://docs.trynia.ai/api-reference/sources/create-source",
+          "https://docs.trynia.ai/sources/repository",
+          "https://docs.trynia.ai/integrations/installation/overview"
+        ]
+      }
+    },
+    {
+      "match": "oracle",
+      "query": "Use Nia Oracle to choose between two indexes for a given query",
+      "response": {
+        "content": "Nia Oracle is an autonomous research agent that can route a query across multiple indexes and pick the best evidence — useful when you have several candidate sources and want Nia to decide.\n\n**Dispatch a job:**\n\n```bash\ncurl -X POST https://apigcp.trynia.ai/v2/oracle/jobs \\\n  -H \"Authorization: Bearer $NIA_API_KEY\" \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\n        \"query\": \"Should I use Server Components or Client Components for this dashboard?\",\n        \"data_sources\": [\n          \"https://react.dev\",\n          \"https://nextjs.org/docs\"\n        ],\n        \"output_format\": \"json\"\n      }'\n# => { \"job_id\": \"...\" }\n```\n\n**Poll for completion:**\n\n```bash\ncurl https://apigcp.trynia.ai/v2/oracle/jobs/$JOB_ID -H \"Authorization: Bearer $NIA_API_KEY\"\n# => { \"status\": \"completed\", \"result\": { \"answer\": \"...\", \"recommendations\": [...] } }\n```\n\nOr stream live:\n\n```bash\ncurl -N https://apigcp.trynia.ai/v2/oracle/jobs/$JOB_ID/stream -H \"Authorization: Bearer $NIA_API_KEY\"\n```\n\n**How NiaHub uses it:** the `/recommend` page hands a list of candidate pack IDs to Oracle along with the user's intent, and Oracle returns 3 picks with rationale + confidence. When Oracle's daily 1M-context quota is hit, NiaHub falls back to a deterministic ranker so the marketplace still recommends.",
+        "sources": [
+          "https://docs.trynia.ai/oracle-research",
+          "https://docs.trynia.ai/api-reference/oracle/create-job",
+          "https://docs.trynia.ai/api-reference/oracle/stream"
+        ]
+      }
+    }
+  ]
+}

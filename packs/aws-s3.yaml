@@ -1,0 +1,20 @@
+pack_id: aws-s3
+display_name: AWS S3
+tagline: S3 docs + boto3 SDK + AWS re:Post answers.
+description: |
+  S3 API reference, boto3 client surface, and curated answers from re:Post.
+  Pre-signed URLs, multipart uploads, S3 Object Lambda, requester-pays — pulled
+  from current AWS docs, not 2019 Medium posts.
+curator_org: NiaHub
+refresh_cadence: daily
+visibility: public
+accent_color: "#ff9900"
+tags: [aws, storage, python, sdk]
+sources:
+  - type: github
+    url: https://github.com/boto/boto3
+  - type: github
+    url: https://github.com/aws/aws-sdk-js-v3
+benchmark_seed:
+  - "Generate a pre-signed PUT URL valid for 10 minutes with boto3."
+  - "Resume a multipart upload after a network failure."

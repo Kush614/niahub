@@ -1,0 +1,25 @@
+pack_id: nextjs-app-router
+display_name: Next.js App Router
+tagline: Next.js docs + Vercel best practices + canary changelog.
+description: |
+  App Router, Server Actions, streaming, caching semantics, and the Vercel
+  deployment story. Tracks canary so your agent never quotes the pages-router
+  answer.
+curator_org: NiaHub
+refresh_cadence: daily
+visibility: public
+accent_color: "#ffffff"
+tags: [nextjs, vercel, app-router, rsc]
+sources:
+  - type: docs
+    url: https://nextjs.org/docs
+  - type: github
+    url: https://github.com/vercel/next.js
+    branch: canary
+    paths: ["docs/**/*.mdx", "packages/next/src/**/*.ts"]
+  - type: blog
+    url: https://vercel.com/blog
+    tags: [nextjs, app-router]
+benchmark_seed:
+  - "Explain when to use 'use cache' vs revalidatePath in App Router."
+  - "Stream a server action's progress to a client component."

@@ -1,0 +1,20 @@
+pack_id: nozomio-self
+display_name: Nozomio (meta pack)
+tagline: Nia docs — a meta pack about Nia itself.
+description: |
+  A meta pack: the canonical Nia documentation. Install if you're building on
+  Nia or want your agent to understand Nia primitives like sources, categories,
+  oracle jobs, and context-sharing.
+curator_org: NiaHub
+refresh_cadence: daily
+visibility: public
+accent_color: "#1f9eff"
+tags: [nia, nozomio, meta, platform]
+sources:
+  - type: docs
+    url: https://docs.trynia.ai
+  - type: github
+    url: https://github.com/Nozomio-labs/nia-mcp-server
+benchmark_seed:
+  - "Index a private GitHub repo with Nia and expose it via MCP to Cursor."
+  - "Use Nia Oracle to choose between two indexes for a given query."
